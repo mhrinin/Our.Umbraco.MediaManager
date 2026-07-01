@@ -6,245 +6,93 @@ import {
   customElement,
 } from "@umbraco-cms/backoffice/external/lit";
 import { UmbLitElement } from "@umbraco-cms/backoffice/lit-element";
-import { umbConfirmModal } from "@umbraco-cms/backoffice/modal";
-import { UMB_NOTIFICATION_CONTEXT } from "@umbraco-cms/backoffice/notification";
-import type { UmbNotificationContext } from "@umbraco-cms/backoffice/notification";
-import { MediaManagerRepository } from "../../services/media-manager.repository.js";
-import type {
-  FileCandidate,
-  MediaCandidate,
-  ScanResult,
-  ScanType,
-} from "../../types.d.js";
-
-interface Row {
-  id: string;
-  primary: string;
-  secondary: string;
-  sizeBytes: number;
-}
-
-const POLL_INTERVAL_MS = 1000;
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+import { MediaManagerContext } from "../../context/media-manager.context.js";
+import { MEDIA_MANAGER_CONTEXT } from "../../context/media-manager.context-token.js";
+import type { Slices } from "../../context/media-manager.context.js";
+import type { ScanType } from "../../types.d.js";
+import "../media-manager/media-manager-stats.element.js";
+import "../media-manager/media-manager-results.element.js";
 
 @customElement("media-manager-dashboard")
 export class MediaManagerDashboardElement extends UmbLitElement {
-  #repository = new MediaManagerRepository(this);
-  #notification?: UmbNotificationContext;
+  #context = new MediaManagerContext(this);
 
-  @state() private _scanning = false;
-  @state() private _busy = false;
-  @state() private _processed = 0;
-  @state() private _scanType?: ScanType;
-  @state() private _result?: ScanResult;
-  @state() private _selected = new Set<string>();
+  @state() private _slices?: Slices;
+  @state() private _activeTab: ScanType = "OrphanedMedia";
 
   constructor() {
     super();
-    this.consumeContext(UMB_NOTIFICATION_CONTEXT, (context) => {
-      this.#notification = context;
+    this.provideContext(MEDIA_MANAGER_CONTEXT, this.#context);
+    this.observe(this.#context.slices, (slices) => {
+      this._slices = slices;
+    });
+    this.observe(this.#context.activeTab, (tab) => {
+      this._activeTab = tab;
     });
   }
 
-  async #scan(type: ScanType) {
-    this._scanning = true;
-    this._scanType = type;
-    this._result = undefined;
-    this._selected = new Set();
-    this._processed = 0;
-
-    try {
-      const jobId = await this.#repository.startScan(type);
-
-      while (true) {
-        await sleep(POLL_INTERVAL_MS);
-        const status = await this.#repository.getStatus(jobId);
-        if (!status) {
-          continue;
-        }
-        this._processed = status.processed;
-
-        if (status.state === "Completed") {
-          this._result = (await this.#repository.getResult(jobId)) ?? undefined;
-          break;
-        }
-        if (status.state === "Failed" || status.state === "Cancelled") {
-          this.#notification?.peek("danger", {
-            data: { message: `Scan ${status.state}${status.error ? `: ${status.error}` : ""}` },
-          });
-          break;
-        }
-      }
-    } catch (error) {
-      this.#notification?.peek("danger", { data: { message: "Scan failed to start." } });
-      console.error(error);
-    } finally {
-      this._scanning = false;
-    }
+  override firstUpdated() {
+    this.#context.scanAll();
   }
 
-  get #rows(): Row[] {
-    if (!this._result) {
-      return [];
-    }
-    if (this._scanType === "OrphanedMedia") {
-      return this._result.media.map((m: MediaCandidate) => ({
-        id: m.key,
-        primary: m.name,
-        secondary: m.path ?? "",
-        sizeBytes: m.sizeBytes,
-      }));
-    }
-    return this._result.files.map((f: FileCandidate) => ({
-      id: f.path,
-      primary: f.path,
-      secondary: "",
-      sizeBytes: f.sizeBytes,
-    }));
+  get #scanning(): boolean {
+    return (
+      this._slices?.OrphanedMedia.state === "scanning" ||
+      this._slices?.OrphanedFiles.state === "scanning"
+    );
   }
 
-  #toggle(id: string) {
-    const next = new Set(this._selected);
-    next.has(id) ? next.delete(id) : next.add(id);
-    this._selected = next;
+  #count(type: ScanType): number | undefined {
+    const slice = this._slices?.[type];
+    if (slice?.state !== "done") {
+      return undefined;
+    }
+    return type === "OrphanedMedia"
+      ? slice.result?.media.length ?? 0
+      : slice.result?.files.length ?? 0;
   }
 
-  #toggleAll(rows: Row[]) {
-    this._selected =
-      this._selected.size === rows.length
-        ? new Set()
-        : new Set(rows.map((r) => r.id));
-  }
-
-  async #deleteSelected() {
-    const ids = [...this._selected];
-    if (ids.length === 0) {
-      return;
-    }
-
-    const isMedia = this._scanType === "OrphanedMedia";
-    await umbConfirmModal(this, {
-      headline: `Delete ${ids.length} item(s)`,
-      content: isMedia
-        ? "The selected media will be moved to the Recycle Bin (recoverable)."
-        : "The selected physical files will be permanently deleted. This cannot be undone.",
-      color: "danger",
-      confirmLabel: "Delete",
-    });
-
-    this._busy = true;
-    try {
-      const result = isMedia
-        ? await this.#repository.deleteMedia(ids, false)
-        : await this.#repository.deleteFiles(ids, false);
-
-      const affected = result?.affected ?? 0;
-      const errors = result?.errors ?? [];
-      this.#notification?.peek(errors.length ? "warning" : "positive", {
-        data: {
-          message: `${affected} item(s) processed${errors.length ? `, ${errors.length} error(s)` : ""}.`,
-        },
-      });
-
-      if (this._scanType) {
-        await this.#scan(this._scanType);
-      }
-    } catch (error) {
-      this.#notification?.peek("danger", { data: { message: "Delete failed." } });
-      console.error(error);
-    } finally {
-      this._busy = false;
-    }
-  }
-
-  #formatBytes(bytes: number): string {
-    if (bytes <= 0) {
-      return "0 B";
-    }
-    const units = ["B", "KB", "MB", "GB"];
-    const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return `${(bytes / 1024 ** exponent).toFixed(exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+  #renderTab(type: ScanType, label: string) {
+    const count = this.#count(type);
+    return html`
+      <uui-tab
+        label=${label}
+        ?active=${this._activeTab === type}
+        @click=${() => this.#context.setActiveTab(type)}
+      >
+        ${label}${count === undefined ? nothing : html` <uui-badge>${count}</uui-badge>`}
+      </uui-tab>
+    `;
   }
 
   override render() {
     return html`
-      <uui-box headline="Media Manager">
-        <div class="actions">
+      <div class="dashboard">
+        <div class="header">
+          <div class="titles">
+            <h1>Media Manager</h1>
+            <p>Find and safely remove unused media and orphaned files.</p>
+          </div>
           <uui-button
-            look="primary"
-            label="Scan orphaned media"
-            .state=${this._scanning && this._scanType === "OrphanedMedia" ? "waiting" : undefined}
-            ?disabled=${this._scanning || this._busy}
-            @click=${() => this.#scan("OrphanedMedia")}
-          ></uui-button>
-          <uui-button
-            look="primary"
-            label="Scan orphaned files"
-            .state=${this._scanning && this._scanType === "OrphanedFiles" ? "waiting" : undefined}
-            ?disabled=${this._scanning || this._busy}
-            @click=${() => this.#scan("OrphanedFiles")}
-          ></uui-button>
+            look="outline"
+            label="Rescan"
+            ?disabled=${this.#scanning}
+            @click=${() => this.#context.scanAll()}
+          >
+            <uui-icon name="icon-sync"></uui-icon>
+            Rescan
+          </uui-button>
         </div>
 
-        ${this._scanning
-          ? html`<div class="status"><uui-loader-circle></uui-loader-circle> Scanning… (${this._processed} processed)</div>`
-          : nothing}
-        ${this._result ? this.#renderResult() : nothing}
-      </uui-box>
-    `;
-  }
+        <media-manager-stats></media-manager-stats>
 
-  #renderResult() {
-    const rows = this.#rows;
-    return html`
-      <div class="summary">
-        <strong>${rows.length}</strong> orphaned ${this._scanType === "OrphanedMedia" ? "media item(s)" : "file(s)"} —
-        reclaimable <strong>${this.#formatBytes(this._result?.reclaimableBytes ?? 0)}</strong>
+        <uui-tab-group>
+          ${this.#renderTab("OrphanedMedia", "Orphaned media")}
+          ${this.#renderTab("OrphanedFiles", "Orphaned files")}
+        </uui-tab-group>
+
+        <media-manager-results></media-manager-results>
       </div>
-
-      ${rows.length === 0
-        ? html`<p>Nothing to clean up. 🎉</p>`
-        : html`
-            <div class="toolbar">
-              <uui-button
-                look="secondary"
-                color="danger"
-                label="Delete selected (${this._selected.size})"
-                ?disabled=${this._selected.size === 0 || this._busy}
-                @click=${() => this.#deleteSelected()}
-              ></uui-button>
-            </div>
-            <uui-table>
-              <uui-table-head>
-                <uui-table-head-cell style="width:40px">
-                  <uui-checkbox
-                    label="Select all"
-                    ?checked=${this._selected.size === rows.length && rows.length > 0}
-                    @change=${() => this.#toggleAll(rows)}
-                  ></uui-checkbox>
-                </uui-table-head-cell>
-                <uui-table-head-cell>${this._scanType === "OrphanedMedia" ? "Name" : "Path"}</uui-table-head-cell>
-                <uui-table-head-cell>${this._scanType === "OrphanedMedia" ? "Path" : ""}</uui-table-head-cell>
-                <uui-table-head-cell style="width:120px">Size</uui-table-head-cell>
-              </uui-table-head>
-              ${rows.map(
-                (row) => html`
-                  <uui-table-row>
-                    <uui-table-cell>
-                      <uui-checkbox
-                        label="Select"
-                        ?checked=${this._selected.has(row.id)}
-                        @change=${() => this.#toggle(row.id)}
-                      ></uui-checkbox>
-                    </uui-table-cell>
-                    <uui-table-cell>${row.primary}</uui-table-cell>
-                    <uui-table-cell>${row.secondary}</uui-table-cell>
-                    <uui-table-cell>${this.#formatBytes(row.sizeBytes)}</uui-table-cell>
-                  </uui-table-row>
-                `,
-              )}
-            </uui-table>
-          `}
     `;
   }
 
@@ -252,20 +100,33 @@ export class MediaManagerDashboardElement extends UmbLitElement {
     css`
       :host {
         display: block;
+        height: 100%;
+        overflow: auto;
+        background: var(--uui-color-background);
+      }
+      .dashboard {
+        display: flex;
+        flex-direction: column;
+        gap: var(--uui-size-space-5);
         padding: var(--uui-size-layout-1);
+        max-width: 1400px;
+        margin: 0 auto;
       }
-      .actions {
+      .header {
         display: flex;
-        gap: var(--uui-size-space-3);
-        margin-bottom: var(--uui-size-space-4);
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: var(--uui-size-space-4);
       }
-      .status,
-      .summary,
-      .toolbar {
-        margin: var(--uui-size-space-4) 0;
-        display: flex;
-        align-items: center;
-        gap: var(--uui-size-space-3);
+      .titles h1 {
+        margin: 0;
+      }
+      .titles p {
+        margin: var(--uui-size-space-1) 0 0;
+        color: var(--uui-color-text-alt);
+      }
+      uui-tab-group {
+        --uui-tab-divider: var(--uui-color-divider);
       }
     `,
   ];
