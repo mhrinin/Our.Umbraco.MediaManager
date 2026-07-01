@@ -56,7 +56,9 @@ docs/                              # feature proposal / design notes
 ## Releasing
 
 Push a `v*` git tag (e.g. `v0.1.0`); the release workflow packs and publishes to nuget.org using
-the `NUGET_API_KEY` repository secret.
+**Trusted Publishing** (OIDC) — no stored API key. Configure a Trusted Publishing policy at
+nuget.org (Repository Owner `mhrinin`, Repository `Ideo.Umbraco.MediaManager`, Workflow File
+`release.yml`) and set the `NUGET_USER` repository variable to your nuget.org username.
 
 ## License
 

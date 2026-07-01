@@ -8,6 +8,9 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for OIDC / NuGet Trusted Publishing
     steps:
       - uses: actions/checkout@v4
 
@@ -41,9 +44,17 @@ jobs:
           -p:SkipClientBuild=true
           -o artifacts
 
+      # Exchange the GitHub OIDC token for a short-lived nuget.org API key (Trusted Publishing).
+      # Configure the matching policy at nuget.org → your username → Trusted Publishing.
+      - name: NuGet login (Trusted Publishing / OIDC)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Push to nuget.org
         run: >
           dotnet nuget push "artifacts/*.nupkg"
           --source https://api.nuget.org/v3/index.json
-          --api-key ${{ secrets.NUGET_API_KEY }}
+          --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           --skip-duplicate
