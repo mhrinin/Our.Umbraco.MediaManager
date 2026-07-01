@@ -1,29 +1,117 @@
 root = true
 
-[*]
-charset = utf-8
-end_of_line = lf
-insert_final_newline = true
-trim_trailing_whitespace = true
-indent_style = space
-indent_size = 4
-
-[*.{json,js,ts,yml,yaml,css,html}]
-indent_size = 2
-
-[*.{csproj,props,targets,xml}]
-indent_size = 2
+# C# code style — companion to csharp-code-style.md.
+# Copy this file to a project's repo root. The built-in .NET (Roslyn) analyzers
+# surface these in the IDE; to fail the build on violations, also set
+# <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild> in the project
+# (.csproj or Directory.Build.props) — intentionally not shipped here.
+#
+# Version-gated rules (IDE0290 primary constructors, IDE0300-0305 collection
+# expressions, IDE0161 file-scoped namespaces, IDE0090 target-typed new) are
+# inert on older compilers: analyzers respect the project's <LangVersion>, so
+# no manual guarding is needed.
 
 [*.cs]
-# Namespaces
-csharp_style_namespace_declarations = file_scoped:warning
-# var / expression bodies
-csharp_style_expression_bodied_methods = when_on_single_line:suggestion
-csharp_style_expression_bodied_properties = true:suggestion
-# null checks
-dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggestion
-# braces required
-csharp_prefer_braces = true:warning
-# this. preferences
-dotnet_style_qualification_for_field = false:suggestion
-dotnet_style_qualification_for_property = false:suggestion
+
+# Braces — always, even for single statements
+csharp_prefer_braces = true
+dotnet_diagnostic.IDE0011.severity = warning
+
+# Expression-bodied members (simple methods/properties)
+csharp_style_expression_bodied_methods = when_on_single_line
+csharp_style_expression_bodied_indexers = when_on_single_line
+csharp_style_expression_bodied_properties = true
+csharp_style_expression_bodied_accessors = true
+dotnet_diagnostic.IDE0022.severity = warning
+dotnet_diagnostic.IDE0026.severity = warning
+dotnet_diagnostic.IDE0025.severity = warning
+dotnet_diagnostic.IDE0027.severity = warning
+
+# Switch expressions over switch/if statement chains
+csharp_style_prefer_switch_expression = true
+dotnet_diagnostic.IDE0066.severity = warning
+
+# Collection expressions [..] (C# 12 / .NET 8+)
+dotnet_style_prefer_collection_expression = true
+dotnet_diagnostic.IDE0300.severity = warning
+dotnet_diagnostic.IDE0301.severity = warning
+dotnet_diagnostic.IDE0302.severity = warning
+dotnet_diagnostic.IDE0303.severity = warning
+dotnet_diagnostic.IDE0304.severity = warning
+dotnet_diagnostic.IDE0305.severity = warning
+
+# Primary constructors (C# 12 / .NET 8+)
+csharp_style_prefer_primary_constructors = true
+dotnet_diagnostic.IDE0290.severity = warning
+
+# File-scoped namespaces (C# 10 / .NET 6+)
+csharp_style_namespace_declarations = file_scoped
+dotnet_diagnostic.IDE0161.severity = warning
+
+# var when the type is apparent; explicit type when it isn't (elsewhere is judgment)
+csharp_style_var_when_type_is_apparent = true
+csharp_style_var_for_built_in_types = false
+csharp_style_var_elsewhere = false
+dotnet_diagnostic.IDE0007.severity = warning
+dotnet_diagnostic.IDE0008.severity = silent
+
+# Target-typed new() (C# 9 / .NET 5+)
+csharp_style_implicit_object_creation_when_type_is_apparent = true
+dotnet_diagnostic.IDE0090.severity = warning
+
+# Using directives — sort System.* first, remove unused
+dotnet_sort_system_directives_first = true
+dotnet_diagnostic.IDE0005.severity = warning
+
+# Null checks — prefer is-null/pattern matching
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true
+csharp_style_prefer_pattern_matching = true
+csharp_style_prefer_not_pattern = true
+dotnet_diagnostic.IDE0041.severity = warning
+dotnet_diagnostic.IDE0078.severity = warning
+dotnet_diagnostic.IDE0083.severity = warning
+
+# Naming (IDE1006)
+dotnet_diagnostic.IDE1006.severity = warning
+
+# Interfaces: PascalCase with an 'I' prefix
+dotnet_naming_rule.interfaces_pascal_case_i_prefix.severity = warning
+dotnet_naming_rule.interfaces_pascal_case_i_prefix.symbols = interface_symbols
+dotnet_naming_rule.interfaces_pascal_case_i_prefix.style = pascal_case_i_prefix
+dotnet_naming_symbols.interface_symbols.applicable_kinds = interface
+dotnet_naming_symbols.interface_symbols.applicable_accessibilities = *
+dotnet_naming_style.pascal_case_i_prefix.capitalization = pascal_case
+dotnet_naming_style.pascal_case_i_prefix.required_prefix = I
+
+# Types (class/struct/enum/delegate): PascalCase
+dotnet_naming_rule.types_pascal_case.severity = warning
+dotnet_naming_rule.types_pascal_case.symbols = type_symbols
+dotnet_naming_rule.types_pascal_case.style = pascal_case
+dotnet_naming_symbols.type_symbols.applicable_kinds = class, struct, enum, delegate
+dotnet_naming_symbols.type_symbols.applicable_accessibilities = *
+
+# Non-field members (method/property/event): PascalCase
+dotnet_naming_rule.members_pascal_case.severity = warning
+dotnet_naming_rule.members_pascal_case.symbols = member_symbols
+dotnet_naming_rule.members_pascal_case.style = pascal_case
+dotnet_naming_symbols.member_symbols.applicable_kinds = method, property, event
+dotnet_naming_symbols.member_symbols.applicable_accessibilities = *
+
+# Constants: PascalCase
+dotnet_naming_rule.constants_pascal_case.severity = warning
+dotnet_naming_rule.constants_pascal_case.symbols = constant_symbols
+dotnet_naming_rule.constants_pascal_case.style = pascal_case
+dotnet_naming_symbols.constant_symbols.applicable_kinds = field, local
+dotnet_naming_symbols.constant_symbols.required_modifiers = const
+dotnet_naming_symbols.constant_symbols.applicable_accessibilities = *
+
+# Locals and parameters: camelCase
+dotnet_naming_rule.locals_camel_case.severity = warning
+dotnet_naming_rule.locals_camel_case.symbols = local_symbols
+dotnet_naming_rule.locals_camel_case.style = camel_case
+dotnet_naming_symbols.local_symbols.applicable_kinds = local, parameter
+dotnet_naming_symbols.local_symbols.applicable_accessibilities = *
+
+# Shared naming styles
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+dotnet_naming_style.camel_case.capitalization = camel_case
