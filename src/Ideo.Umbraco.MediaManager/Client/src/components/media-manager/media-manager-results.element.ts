@@ -1,12 +1,12 @@
-import {
-  css,
-  html,
-  nothing,
-  state,
-  customElement,
-} from "@umbraco-cms/backoffice/external/lit";
+import { css, html, state, customElement } from "@umbraco-cms/backoffice/external/lit";
 import { UmbLitElement } from "@umbraco-cms/backoffice/lit-element";
 import { umbConfirmModal } from "@umbraco-cms/backoffice/modal";
+import { UmbModalRouteRegistrationController } from "@umbraco-cms/backoffice/router";
+import { UMB_WORKSPACE_MODAL } from "@umbraco-cms/backoffice/workspace";
+import {
+  UMB_MEDIA_ENTITY_TYPE,
+  UMB_EDIT_MEDIA_WORKSPACE_PATH_PATTERN,
+} from "@umbraco-cms/backoffice/media";
 import "@umbraco-cms/backoffice/components";
 import type {
   UmbTableColumn,
@@ -18,6 +18,8 @@ import { MEDIA_MANAGER_CONTEXT } from "../../context/media-manager.context-token
 import type { MediaManagerContext, ScanSlice } from "../../context/media-manager.context.js";
 import type { ScanType } from "../../types.d.js";
 import { formatBytes } from "../../utils/format.js";
+
+type ModalRouteBuilder = (params: Record<string, string | number> | null) => string;
 
 const MEDIA_COLUMNS: UmbTableColumn[] = [
   { name: "Name", alias: "name" },
@@ -36,9 +38,22 @@ export class MediaManagerResultsElement extends UmbLitElement {
 
   @state() private _activeTab: ScanType = "OrphanedMedia";
   @state() private _slice?: ScanSlice;
+  @state() private _mediaEditBuilder?: ModalRouteBuilder;
 
   constructor() {
     super();
+
+    // Register a modal route so an orphaned media item can be opened (and inspected) in a
+    // workspace overlay without leaving the dashboard.
+    new UmbModalRouteRegistrationController(this, UMB_WORKSPACE_MODAL)
+      .addUniquePaths(["unique"])
+      .onSetup((params) => ({
+        data: { entityType: UMB_MEDIA_ENTITY_TYPE, preset: { unique: params.unique } },
+      }))
+      .observeRouteBuilder((builder) => {
+        this._mediaEditBuilder = builder;
+      });
+
     this.consumeContext(MEDIA_MANAGER_CONTEXT, (context) => {
       this.#context = context;
       this.observe(context?.activeTab, (tab) => {
@@ -83,7 +98,7 @@ export class MediaManagerResultsElement extends UmbLitElement {
         id: m.key,
         icon: "icon-picture",
         data: [
-          { columnAlias: "name", value: m.name },
+          { columnAlias: "name", value: this.#renderName(m.key, m.name) },
           { columnAlias: "path", value: html`<span class="path">${m.path ?? ""}</span>` },
           { columnAlias: "size", value: formatBytes(m.sizeBytes) },
         ],
@@ -98,6 +113,16 @@ export class MediaManagerResultsElement extends UmbLitElement {
         { columnAlias: "size", value: formatBytes(f.sizeBytes) },
       ],
     }));
+  }
+
+  #renderName(key: string, name: string) {
+    if (!this._mediaEditBuilder) {
+      return name;
+    }
+    const href =
+      this._mediaEditBuilder({ unique: key }) +
+      UMB_EDIT_MEDIA_WORKSPACE_PATH_PATTERN.generateLocal({ unique: key });
+    return html`<uui-button look="link" compact label=${name} href=${href}>${name}</uui-button>`;
   }
 
   #onSelection(event: Event) {
@@ -137,8 +162,8 @@ export class MediaManagerResultsElement extends UmbLitElement {
   #renderScanning(processed: number) {
     return html`
       <uui-box>
-        <div class="scanning">
-          <uui-loader-bar></uui-loader-bar>
+        <div class="state">
+          <uui-loader-circle></uui-loader-circle>
           <span>Scanning… (${processed} processed)</span>
         </div>
       </uui-box>
@@ -148,28 +173,33 @@ export class MediaManagerResultsElement extends UmbLitElement {
   #renderEmpty() {
     return html`
       <uui-box>
-        <umb-empty-state size="small">
-          Nothing to clean up here — your ${this.#isMedia ? "media" : "files"} are all in use. 🎉
-        </umb-empty-state>
+        <div class="state">
+          <umb-empty-state size="small">
+            Nothing to clean up here — your ${this.#isMedia ? "media" : "files"} are all in use. 🎉
+          </umb-empty-state>
+        </div>
       </uui-box>
     `;
   }
 
   #renderTable(slice: ScanSlice) {
     const selectedCount = slice.selected.length;
+    const itemCount = this.#items.length;
     return html`
-      <uui-box>
-        <div class="toolbar" slot="header-actions">
-          ${selectedCount > 0
-            ? html`<span class="selected-count">${selectedCount} selected</span>`
-            : nothing}
+      <uui-box class="results">
+        <div class="toolbar">
+          <span class="summary">
+            ${selectedCount > 0 ? `${selectedCount} selected` : `${itemCount} item(s)`}
+          </span>
           <uui-button
             look="primary"
             color="danger"
             label=${this.#isMedia ? "Move to Recycle Bin" : "Delete files"}
             ?disabled=${selectedCount === 0}
             @click=${this.#deleteSelected}
-          ></uui-button>
+          >
+            ${this.#isMedia ? "Move to Recycle Bin" : "Delete files"}
+          </uui-button>
         </div>
         <umb-table
           .config=${this.#config}
@@ -191,15 +221,21 @@ export class MediaManagerResultsElement extends UmbLitElement {
       .toolbar {
         display: flex;
         align-items: center;
+        justify-content: space-between;
         gap: var(--uui-size-space-3);
+        margin-bottom: var(--uui-size-space-4);
       }
-      .selected-count {
+      .summary {
         color: var(--uui-color-text-alt);
       }
-      .scanning {
+      .state {
         display: flex;
         flex-direction: column;
+        align-items: center;
+        justify-content: center;
         gap: var(--uui-size-space-3);
+        padding: var(--uui-size-space-4);
+        text-align: center;
         color: var(--uui-color-text-alt);
       }
       .path {

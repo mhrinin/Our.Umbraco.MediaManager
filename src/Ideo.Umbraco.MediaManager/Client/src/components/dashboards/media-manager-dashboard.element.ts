@@ -60,7 +60,12 @@ export class MediaManagerDashboardElement extends UmbLitElement {
         ?active=${this._activeTab === type}
         @click=${() => this.#context.setActiveTab(type)}
       >
-        ${label}${count === undefined ? nothing : html` <uui-badge>${count}</uui-badge>`}
+        <span class="tab-label">
+          ${label}
+          ${count === undefined
+            ? nothing
+            : html`<span class="count ${count > 0 ? "has-items" : ""}">${count}</span>`}
+        </span>
       </uui-tab>
     `;
   }
@@ -114,9 +119,10 @@ export class MediaManagerDashboardElement extends UmbLitElement {
       }
       .header {
         display: flex;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
         gap: var(--uui-size-space-4);
+        flex-wrap: wrap;
       }
       .titles h1 {
         margin: 0;
@@ -127,6 +133,29 @@ export class MediaManagerDashboardElement extends UmbLitElement {
       }
       uui-tab-group {
         --uui-tab-divider: var(--uui-color-divider);
+      }
+      .tab-label {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--uui-size-space-2);
+      }
+      .count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.25rem;
+        height: 1.25rem;
+        padding: 0 var(--uui-size-space-1);
+        border-radius: 1rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        line-height: 1;
+        background: var(--uui-color-surface-alt);
+        color: var(--uui-color-text-alt);
+      }
+      .count.has-items {
+        background: var(--uui-color-danger);
+        color: var(--uui-color-danger-contrast);
       }
     `,
   ];

@@ -3,8 +3,9 @@ import { UmbLitElement } from "@umbraco-cms/backoffice/lit-element";
 import { MEDIA_MANAGER_CONTEXT } from "../../context/media-manager.context-token.js";
 import type { Slices } from "../../context/media-manager.context.js";
 import { formatBytes } from "../../utils/format.js";
+import "./media-manager-stat-card.element.js";
 
-interface StatCard {
+interface Stat {
   icon: string;
   label: string;
   value: string;
@@ -24,11 +25,10 @@ export class MediaManagerStatsElement extends UmbLitElement {
     });
   }
 
-  get #cards(): StatCard[] {
+  get #stats(): Stat[] {
     const media = this._slices?.OrphanedMedia;
     const files = this._slices?.OrphanedFiles;
-    const reclaimable =
-      (media?.result?.reclaimableBytes ?? 0) + (files?.result?.reclaimableBytes ?? 0);
+    const scanning = media?.state === "scanning" || files?.state === "scanning";
 
     return [
       {
@@ -46,8 +46,10 @@ export class MediaManagerStatsElement extends UmbLitElement {
       {
         icon: "icon-trash",
         label: "Reclaimable space",
-        value: formatBytes(reclaimable),
-        loading: media?.state === "scanning" || files?.state === "scanning",
+        value: formatBytes(
+          (media?.result?.reclaimableBytes ?? 0) + (files?.result?.reclaimableBytes ?? 0),
+        ),
+        loading: scanning,
       },
     ];
   }
@@ -55,19 +57,14 @@ export class MediaManagerStatsElement extends UmbLitElement {
   override render() {
     return html`
       <div class="grid">
-        ${this.#cards.map(
-          (card) => html`
-            <uui-box class="card">
-              <div class="value">
-                ${card.loading
-                  ? html`<uui-loader-circle></uui-loader-circle>`
-                  : card.value}
-              </div>
-              <div class="label">
-                <uui-icon name=${card.icon}></uui-icon>
-                <span>${card.label}</span>
-              </div>
-            </uui-box>
+        ${this.#stats.map(
+          (stat) => html`
+            <media-manager-stat-card
+              icon=${stat.icon}
+              label=${stat.label}
+              value=${stat.value}
+              ?loading=${stat.loading}
+            ></media-manager-stat-card>
           `,
         )}
       </div>
@@ -80,22 +77,6 @@ export class MediaManagerStatsElement extends UmbLitElement {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: var(--uui-size-space-4);
-      }
-      .card {
-        --uui-box-default-padding: var(--uui-size-space-5);
-      }
-      .value {
-        font-size: var(--uui-type-h2-size, 2rem);
-        font-weight: 700;
-        line-height: 1.1;
-        min-height: 2rem;
-      }
-      .label {
-        display: flex;
-        align-items: center;
-        gap: var(--uui-size-space-2);
-        margin-top: var(--uui-size-space-2);
-        color: var(--uui-color-text-alt);
       }
     `,
   ];
