@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- net9.0 -> Umbraco 16, net10.0 -> Umbraco 17. -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
@@ -15,7 +16,7 @@
     <Company>Ideo Digital</Company>
     <Product>Ideo.Umbraco.MediaManager</Product>
     <Title>Ideo Umbraco Media Manager</Title>
-    <Description>Safe, async media cleanup for Umbraco v17: find and remove orphaned media nodes and orphaned physical files, guarded by a deep reference scan, with dry-run preview and Recycle Bin safety.</Description>
+    <Description>Safe, async media cleanup for Umbraco 16–17: find and remove unused media nodes, duplicates, broken nodes and orphaned physical files, guarded by a deep reference scan, with dry-run preview and Recycle Bin safety.</Description>
     <PackageDescription>$(Description)</PackageDescription>
     <PackageTags>Umbraco;umbraco-marketplace;Media;Cleanup;Orphaned;Extension</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -27,7 +28,22 @@
     <FileVersion>0.1.0.0</FileVersion>
   </PropertyGroup>
 
-  <ItemGroup>
+  <!-- Umbraco 16 (net9.0) -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <DefineConstants>$(DefineConstants);UMBRACO_16</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageReference Include="Umbraco.Cms.Web.Website" Version="[16.0.0,17.0.0)" />
+    <PackageReference Include="Umbraco.Cms.Web.Common" Version="[16.0.0,17.0.0)" />
+    <PackageReference Include="Umbraco.Cms.Api.Common" Version="[16.0.0,17.0.0)" />
+    <PackageReference Include="Umbraco.Cms.Api.Management" Version="[16.0.0,17.0.0)" />
+  </ItemGroup>
+
+  <!-- Umbraco 17 (net10.0) -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <DefineConstants>$(DefineConstants);UMBRACO_17</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <PackageReference Include="Umbraco.Cms.Web.Website" Version="[17.0.0,18.0.0)" />
     <PackageReference Include="Umbraco.Cms.Web.Common" Version="[17.0.0,18.0.0)" />
     <PackageReference Include="Umbraco.Cms.Api.Common" Version="[17.0.0,18.0.0)" />

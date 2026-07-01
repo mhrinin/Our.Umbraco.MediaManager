@@ -37,13 +37,10 @@ public sealed class CleanupService(
                 continue;
             }
 
-            await auditService.AddAsync(
-                AuditType.Delete,
-                userKey,
+            await AuditDeleteAsync(
                 attempt.Result.Id,
                 MediaEntityType,
-                $"Media Manager: moved orphaned media '{attempt.Result.Name}' to the recycle bin.",
-                string.Empty);
+                $"Media Manager: moved unused media '{attempt.Result.Name}' to the recycle bin.");
             affected++;
         }
 
@@ -59,7 +56,6 @@ public sealed class CleanupService(
             return new CleanupResult(paths.Count(fileSystem.FileExists), []);
         }
 
-        var userKey = CurrentUserKey();
         var errors = new List<string>();
         var affected = 0;
 
@@ -72,19 +68,35 @@ public sealed class CleanupService(
             }
 
             fileSystem.DeleteFile(path);
-            await auditService.AddAsync(
-                AuditType.Delete,
-                userKey,
+            await AuditDeleteAsync(
                 UmbracoConstants.System.Root,
                 MediaFileEntityType,
-                $"Media Manager: deleted orphaned physical file '{path}'.",
-                string.Empty);
+                $"Media Manager: deleted orphaned physical file '{path}'.");
             affected++;
         }
 
         return new CleanupResult(affected, errors);
     }
 
+    // Umbraco 17 audits via the async, key-based API; Umbraco 14–16 only expose the synchronous,
+    // int-user-id Add. Isolate that single difference here so the callers stay version-agnostic.
+    private Task AuditDeleteAsync(int entityId, string entityType, string comment)
+    {
+#if UMBRACO_17
+        return auditService.AddAsync(AuditType.Delete, CurrentUserKey(), entityId, entityType, comment, string.Empty);
+#else
+        auditService.Add(AuditType.Delete, CurrentUserId(), entityId, entityType, comment, string.Empty);
+        return Task.CompletedTask;
+#endif
+    }
+
     private Guid CurrentUserKey()
         => backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Key ?? UmbracoConstants.Security.SuperUserKey;
+
+#if !UMBRACO_17
+#pragma warning disable CS0618 // SuperUserId is obsolete-but-present on Umbraco 16; the sync audit API needs an int user id.
+    private int CurrentUserId()
+        => backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Id ?? UmbracoConstants.Security.SuperUserId;
+#pragma warning restore CS0618
+#endif
 }
