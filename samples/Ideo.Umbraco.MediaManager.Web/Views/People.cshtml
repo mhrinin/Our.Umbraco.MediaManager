@@ -1,6 +1,8 @@
-﻿@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<People>
+﻿@using Umbraco.Cms.Web.Common.PublishedModels;
+@using Umbraco.Extensions
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<People>
 @{
-    Layout = "_Master.cshtml";
+    Layout = "master.cshtml";
 }
 @{
     void SocialLink(string content, string service)
@@ -13,7 +15,7 @@
     }
 }
 
-<partial name="Partials/SectionHeader"/>
+@Html.Partial("~/Views/Partials/SectionHeader.cshtml")
 
 <section class="section">
 

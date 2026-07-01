@@ -1,10 +1,11 @@
 ﻿@using ContentModels = Umbraco.Cms.Web.Common.PublishedModels
+@using Umbraco.Extensions
 @inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<ContentModels.ContentPage>
 @{
-    Layout = "_Master.cshtml";
+    Layout = "master.cshtml";
 }
 
-<partial name="Partials/SectionHeader" />
+@Html.Partial("~/Views/Partials/SectionHeader.cshtml")
 
 <section class="section">
 
@@ -12,7 +13,7 @@
 
         <div class="col-md-3">
             <nav class="nav-bar nav-bar--list">
-                <partial name="Partials/Navigation/SubNavigation" />
+                @Html.Partial("~/Views/Partials/Navigation/SubNavigation.cshtml")
             </nav>
         </div>
 

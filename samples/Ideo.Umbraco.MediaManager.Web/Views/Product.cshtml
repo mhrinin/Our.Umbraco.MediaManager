@@ -1,10 +1,12 @@
-﻿@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<Product>
+﻿@using Umbraco.Cms.Web.Common.PublishedModels
+@using Umbraco.Extensions
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<Product>
 @{
-    Layout = "_Master.cshtml";
+    Layout = "master.cshtml";
     var defaultCurrency = Model.Parent<Products>().DefaultCurrency;
 }
 <!-- for the section we want to show the shop header -->
-<partial name="Partials/SectionHeader" model="@Model.Parent"/>
+@Html.Partial("~/Views/Partials/SectionHeader.cshtml", Model.Parent)
 
 <section class="section">
     <div class="container">
@@ -22,7 +24,7 @@
                     <button class="button button--border--solid">Buy</button>
                 </div>
                 <div class="product-advantages">
-                    @await Html.GetBlockListHtmlAsync(Model, "features")
+                    @Html.GetBlockListHtml(Model, "features")
                 </div>
             </div>
         </div>

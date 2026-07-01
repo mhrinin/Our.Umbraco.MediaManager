@@ -1,9 +1,11 @@
 ﻿@using ContentModels = Umbraco.Cms.Web.Common.PublishedModels
+@using Microsoft.AspNetCore.Mvc.Rendering
+@using Umbraco.Extensions
 @inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage<ContentModels.Blogpost>
 @{
-    Layout = "_Master.cshtml";
+    Layout = "master.cshtml";
 }
-<partial name="Partials/SectionHeader"/>
+@Html.Partial("~/Views/Partials/SectionHeader.cshtml")
 
 <section class="section">
     <div class="container">
@@ -11,7 +13,7 @@
             <div class="blogpost-meta">
                 <small class="blogpost-date">@Model.CreateDate.ToShortDateString()</small>
                 <span class="blogpost-cat">
-                    <partial name="Partials/CategoryLinks" model="Model.Categories"/>
+                    @Html.Partial("~/Views/Partials/CategoryLinks.cshtml", Model.Categories)
                 </span>
             </div>
             <h3>@Model.Excerpt</h3>

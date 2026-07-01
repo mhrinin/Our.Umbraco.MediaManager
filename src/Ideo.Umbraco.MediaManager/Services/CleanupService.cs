@@ -8,8 +8,14 @@ using UmbracoConstants = Umbraco.Cms.Core.Constants;
 
 namespace Ideo.Umbraco.MediaManager.Services;
 
+/// <summary>
+/// Umbraco 13 cleanup: the legacy backoffice has no <c>IMediaEditingService</c>/async audit APIs, so
+/// this uses the synchronous, int-user-id services (<see cref="IMediaService.MoveToRecycleBin"/> and
+/// <see cref="IAuditService.Add"/>). Media nodes go to the Recycle Bin (reversible); orphan files are
+/// deleted from disk. Every action is audited.
+/// </summary>
 public sealed class CleanupService(
-    IMediaEditingService mediaEditingService,
+    IMediaService mediaService,
     MediaFileManager mediaFileManager,
     IAuditService auditService,
     IBackOfficeSecurityAccessor backOfficeSecurityAccessor) : ICleanupService
@@ -17,45 +23,56 @@ public sealed class CleanupService(
     private const string MediaEntityType = "media";
     private const string MediaFileEntityType = "media-file";
 
-    public async Task<CleanupResult> DeleteMediaAsync(IReadOnlyList<Guid> keys, bool dryRun)
+    public Task<CleanupResult> DeleteMediaAsync(IReadOnlyList<Guid> keys, bool dryRun)
     {
         if (dryRun)
         {
-            return new CleanupResult(keys.Count, []);
+            return Task.FromResult(new CleanupResult(keys.Count, []));
         }
 
-        var userKey = CurrentUserKey();
+        var userId = CurrentUserId();
         var errors = new List<string>();
         var affected = 0;
 
         foreach (var key in keys)
         {
-            var attempt = await mediaEditingService.MoveToRecycleBinAsync(key, userKey);
-            if (!attempt.Success || attempt.Result is null)
+            var media = mediaService.GetById(key);
+            if (media is null)
             {
-                errors.Add($"Media '{key}' could not be moved to the recycle bin ({attempt.Status}).");
+                errors.Add($"Media '{key}' was not found.");
                 continue;
             }
 
-            await AuditDeleteAsync(
-                attempt.Result.Id,
+            var attempt = mediaService.MoveToRecycleBin(media, userId);
+            if (!attempt.Success)
+            {
+                errors.Add($"Media '{media.Name}' could not be moved to the recycle bin.");
+                continue;
+            }
+
+            auditService.Add(
+                AuditType.Delete,
+                userId,
+                media.Id,
                 MediaEntityType,
-                $"Media Manager: moved unused media '{attempt.Result.Name}' to the recycle bin.");
+                $"Media Manager: moved unused media '{media.Name}' to the recycle bin.",
+                string.Empty);
             affected++;
         }
 
-        return new CleanupResult(affected, errors);
+        return Task.FromResult(new CleanupResult(affected, errors));
     }
 
-    public async Task<CleanupResult> DeleteFilesAsync(IReadOnlyList<string> paths, bool dryRun)
+    public Task<CleanupResult> DeleteFilesAsync(IReadOnlyList<string> paths, bool dryRun)
     {
         var fileSystem = mediaFileManager.FileSystem;
 
         if (dryRun)
         {
-            return new CleanupResult(paths.Count(fileSystem.FileExists), []);
+            return Task.FromResult(new CleanupResult(paths.Count(fileSystem.FileExists), []));
         }
 
+        var userId = CurrentUserId();
         var errors = new List<string>();
         var affected = 0;
 
@@ -68,35 +85,21 @@ public sealed class CleanupService(
             }
 
             fileSystem.DeleteFile(path);
-            await AuditDeleteAsync(
+            auditService.Add(
+                AuditType.Delete,
+                userId,
                 UmbracoConstants.System.Root,
                 MediaFileEntityType,
-                $"Media Manager: deleted orphaned physical file '{path}'.");
+                $"Media Manager: deleted orphaned physical file '{path}'.",
+                string.Empty);
             affected++;
         }
 
-        return new CleanupResult(affected, errors);
+        return Task.FromResult(new CleanupResult(affected, errors));
     }
 
-    // Umbraco 17 audits via the async, key-based API; Umbraco 14–16 only expose the synchronous,
-    // int-user-id Add. Isolate that single difference here so the callers stay version-agnostic.
-    private Task AuditDeleteAsync(int entityId, string entityType, string comment)
-    {
-#if UMBRACO_17
-        return auditService.AddAsync(AuditType.Delete, CurrentUserKey(), entityId, entityType, comment, string.Empty);
-#else
-        auditService.Add(AuditType.Delete, CurrentUserId(), entityId, entityType, comment, string.Empty);
-        return Task.CompletedTask;
-#endif
-    }
-
-    private Guid CurrentUserKey()
-        => backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Key ?? UmbracoConstants.Security.SuperUserKey;
-
-#if !UMBRACO_17
-#pragma warning disable CS0618 // SuperUserId is obsolete-but-present on Umbraco 16; the sync audit API needs an int user id.
+#pragma warning disable CS0618 // SuperUserId is a last-resort fallback; the sync audit API takes an int user id.
     private int CurrentUserId()
         => backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Id ?? UmbracoConstants.Security.SuperUserId;
 #pragma warning restore CS0618
-#endif
 }
