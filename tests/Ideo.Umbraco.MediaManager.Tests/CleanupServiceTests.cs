@@ -4,75 +4,79 @@ using Umbraco.Cms.Core;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Security;
 using Umbraco.Cms.Core.Services;
+using Umbraco.Cms.Core.Services.OperationStatus;
 
 namespace Ideo.Umbraco.MediaManager.Tests;
 
 public class CleanupServiceTests
 {
-    private static (CleanupService service, Mock<IMediaService> media, Mock<IAuditService> audit) CreateService()
+    private static (CleanupService service, Mock<IMediaEditingService> editing, Mock<IAuditService> audit) CreateService()
     {
-        var media = new Mock<IMediaService>();
+        var editing = new Mock<IMediaEditingService>();
         var audit = new Mock<IAuditService>();
+        audit
+            .Setup(a => a.AddAsync(It.IsAny<AuditType>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(Attempt.Succeed(AuditLogOperationStatus.Success));
+
         var security = new Mock<IBackOfficeSecurityAccessor>();
         security.SetupGet(s => s.BackOfficeSecurity).Returns((IBackOfficeSecurity?)null);
 
-        // MediaFileManager is not used by DeleteMedia, so it is safe to pass null here.
-        var service = new CleanupService(media.Object, null!, audit.Object, security.Object);
-        return (service, media, audit);
+        // MediaFileManager is not used by DeleteMediaAsync, so it is safe to pass null here.
+        var service = new CleanupService(editing.Object, null!, audit.Object, security.Object);
+        return (service, editing, audit);
     }
 
-    private static Mock<IMedia> MediaWith(Guid key, int id)
+    private static IMedia MediaWith(int id)
     {
         var media = new Mock<IMedia>();
-        media.SetupGet(m => m.Key).Returns(key);
         media.SetupGet(m => m.Id).Returns(id);
         media.SetupGet(m => m.Name).Returns($"media-{id}");
-        return media;
+        return media.Object;
     }
 
     [Fact]
-    public void DeleteMedia_DryRun_MutatesNothing()
+    public async Task DeleteMedia_DryRun_MutatesNothing()
+    {
+        var (service, editing, audit) = CreateService();
+
+        var result = await service.DeleteMediaAsync([Guid.NewGuid(), Guid.NewGuid()], dryRun: true);
+
+        Assert.Equal(2, result.Affected);
+        Assert.Empty(result.Errors);
+        editing.Verify(e => e.MoveToRecycleBinAsync(It.IsAny<Guid>(), It.IsAny<Guid>()), Times.Never);
+        audit.Verify(a => a.AddAsync(It.IsAny<AuditType>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteMedia_Execute_MovesToRecycleBinAndAudits()
     {
         var key = Guid.NewGuid();
-        var (service, media, audit) = CreateService();
-        media.Setup(m => m.GetById(key)).Returns(MediaWith(key, 1).Object);
+        var (service, editing, audit) = CreateService();
+        editing
+            .Setup(e => e.MoveToRecycleBinAsync(key, It.IsAny<Guid>()))
+            .ReturnsAsync(Attempt.SucceedWithStatus(ContentEditingOperationStatus.Success, MediaWith(7)));
 
-        var result = service.DeleteMedia([key], dryRun: true);
+        var result = await service.DeleteMediaAsync([key], dryRun: false);
 
         Assert.Equal(1, result.Affected);
         Assert.Empty(result.Errors);
-        media.Verify(m => m.MoveToRecycleBin(It.IsAny<IMedia>(), It.IsAny<int>()), Times.Never);
-        audit.Verify(a => a.Add(It.IsAny<AuditType>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        editing.Verify(e => e.MoveToRecycleBinAsync(key, It.IsAny<Guid>()), Times.Once);
+        audit.Verify(a => a.AddAsync(AuditType.Delete, It.IsAny<Guid>(), 7, "media", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
     }
 
     [Fact]
-    public void DeleteMedia_Execute_MovesToRecycleBinAndAudits()
+    public async Task DeleteMedia_Failure_RecordsErrorAndDoesNotAudit()
     {
         var key = Guid.NewGuid();
-        var (service, media, audit) = CreateService();
-        media.Setup(m => m.GetById(key)).Returns(MediaWith(key, 7).Object);
-        media.Setup(m => m.MoveToRecycleBin(It.IsAny<IMedia>(), It.IsAny<int>()))
-            .Returns(Attempt.Succeed<OperationResult>(null!));
+        var (service, editing, audit) = CreateService();
+        editing
+            .Setup(e => e.MoveToRecycleBinAsync(key, It.IsAny<Guid>()))
+            .ReturnsAsync(Attempt.FailWithStatus<IMedia, ContentEditingOperationStatus>(ContentEditingOperationStatus.NotFound, null!));
 
-        var result = service.DeleteMedia([key], dryRun: false);
-
-        Assert.Equal(1, result.Affected);
-        Assert.Empty(result.Errors);
-        media.Verify(m => m.MoveToRecycleBin(It.Is<IMedia>(x => x.Id == 7), It.IsAny<int>()), Times.Once);
-        audit.Verify(a => a.Add(AuditType.Delete, It.IsAny<int>(), 7, "media", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
-    }
-
-    [Fact]
-    public void DeleteMedia_MissingMedia_RecordsErrorAndDoesNotDelete()
-    {
-        var key = Guid.NewGuid();
-        var (service, media, _) = CreateService();
-        media.Setup(m => m.GetById(key)).Returns((IMedia?)null);
-
-        var result = service.DeleteMedia([key], dryRun: false);
+        var result = await service.DeleteMediaAsync([key], dryRun: false);
 
         Assert.Equal(0, result.Affected);
         Assert.Single(result.Errors);
-        media.Verify(m => m.MoveToRecycleBin(It.IsAny<IMedia>(), It.IsAny<int>()), Times.Never);
+        audit.Verify(a => a.AddAsync(It.IsAny<AuditType>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 }

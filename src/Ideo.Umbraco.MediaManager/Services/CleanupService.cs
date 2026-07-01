@@ -9,7 +9,7 @@ using UmbracoConstants = Umbraco.Cms.Core.Constants;
 namespace Ideo.Umbraco.MediaManager.Services;
 
 public sealed class CleanupService(
-    IMediaService mediaService,
+    IMediaEditingService mediaEditingService,
     MediaFileManager mediaFileManager,
     IAuditService auditService,
     IBackOfficeSecurityAccessor backOfficeSecurityAccessor) : ICleanupService
@@ -17,40 +17,32 @@ public sealed class CleanupService(
     private const string MediaEntityType = "media";
     private const string MediaFileEntityType = "media-file";
 
-    public CleanupResult DeleteMedia(IReadOnlyList<Guid> keys, bool dryRun)
+    public async Task<CleanupResult> DeleteMediaAsync(IReadOnlyList<Guid> keys, bool dryRun)
     {
-        var userId = CurrentUserId();
+        if (dryRun)
+        {
+            return new CleanupResult(keys.Count, []);
+        }
+
+        var userKey = CurrentUserKey();
         var errors = new List<string>();
         var affected = 0;
 
         foreach (var key in keys)
         {
-            var media = mediaService.GetById(key);
-            if (media is null)
+            var attempt = await mediaEditingService.MoveToRecycleBinAsync(key, userKey);
+            if (!attempt.Success || attempt.Result is null)
             {
-                errors.Add($"Media '{key}' was not found.");
+                errors.Add($"Media '{key}' could not be moved to the recycle bin ({attempt.Status}).");
                 continue;
             }
 
-            if (dryRun)
-            {
-                affected++;
-                continue;
-            }
-
-            var result = mediaService.MoveToRecycleBin(media, userId);
-            if (!result.Success)
-            {
-                errors.Add($"Failed to move media '{key}' to the recycle bin.");
-                continue;
-            }
-
-            auditService.Add(
+            await auditService.AddAsync(
                 AuditType.Delete,
-                userId,
-                media.Id,
+                userKey,
+                attempt.Result.Id,
                 MediaEntityType,
-                $"Media Manager: moved orphaned media '{media.Name}' to the recycle bin.",
+                $"Media Manager: moved orphaned media '{attempt.Result.Name}' to the recycle bin.",
                 string.Empty);
             affected++;
         }
@@ -58,10 +50,16 @@ public sealed class CleanupService(
         return new CleanupResult(affected, errors);
     }
 
-    public CleanupResult DeleteFiles(IReadOnlyList<string> paths, bool dryRun)
+    public async Task<CleanupResult> DeleteFilesAsync(IReadOnlyList<string> paths, bool dryRun)
     {
-        var userId = CurrentUserId();
         var fileSystem = mediaFileManager.FileSystem;
+
+        if (dryRun)
+        {
+            return new CleanupResult(paths.Count(fileSystem.FileExists), []);
+        }
+
+        var userKey = CurrentUserKey();
         var errors = new List<string>();
         var affected = 0;
 
@@ -73,16 +71,10 @@ public sealed class CleanupService(
                 continue;
             }
 
-            if (dryRun)
-            {
-                affected++;
-                continue;
-            }
-
             fileSystem.DeleteFile(path);
-            auditService.Add(
+            await auditService.AddAsync(
                 AuditType.Delete,
-                userId,
+                userKey,
                 UmbracoConstants.System.Root,
                 MediaFileEntityType,
                 $"Media Manager: deleted orphaned physical file '{path}'.",
@@ -93,6 +85,6 @@ public sealed class CleanupService(
         return new CleanupResult(affected, errors);
     }
 
-    private int CurrentUserId()
-        => backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Id ?? UmbracoConstants.Security.SuperUserId;
+    private Guid CurrentUserKey()
+        => backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Key ?? UmbracoConstants.Security.SuperUserKey;
 }

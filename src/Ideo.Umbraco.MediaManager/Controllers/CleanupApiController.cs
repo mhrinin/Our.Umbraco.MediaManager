@@ -12,12 +12,12 @@ namespace Ideo.Umbraco.MediaManager.Controllers;
 public class CleanupApiController(ICleanupService cleanupService) : MediaManagerApiControllerBase
 {
     [HttpPost("cleanup/media")]
-    public IActionResult DeleteMedia([FromBody] DeleteMediaRequest request)
-        => Ok(cleanupService.DeleteMedia(request.Keys, request.DryRun));
+    public async Task<IActionResult> DeleteMedia([FromBody] DeleteMediaRequest request)
+        => Ok(await cleanupService.DeleteMediaAsync(request.Keys, request.DryRun));
 
     // Physical file deletion is irreversible (no recycle bin), so require elevated access.
     [Authorize(Policy = AuthorizationPolicies.SectionAccessSettings)]
     [HttpPost("cleanup/files")]
-    public IActionResult DeleteFiles([FromBody] DeleteFilesRequest request)
-        => Ok(cleanupService.DeleteFiles(request.Paths, request.DryRun));
+    public async Task<IActionResult> DeleteFiles([FromBody] DeleteFilesRequest request)
+        => Ok(await cleanupService.DeleteFilesAsync(request.Paths, request.DryRun));
 }
