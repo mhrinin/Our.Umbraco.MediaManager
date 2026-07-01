@@ -1,5 +1,6 @@
 using Ideo.Umbraco.MediaManager.Interfaces;
 using Ideo.Umbraco.MediaManager.Models;
+using Microsoft.Extensions.Options;
 using Umbraco.Cms.Core.IO;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Models.Entities;
@@ -20,14 +21,17 @@ public sealed class UnusedMediaScanner(
     IEntityService entityService,
     IRelationService relationService,
     IMediaReferenceCollector referenceCollector,
-    MediaFileManager mediaFileManager) : IUnusedMediaScanner
+    MediaFileManager mediaFileManager,
+    IOptions<MediaManagerOptions> options) : IUnusedMediaScanner
 {
     private const int PageSize = 500;
 
     public Task<IReadOnlyList<MediaCandidate>> ScanAsync(IProgress<int>? progress, CancellationToken cancellationToken)
     {
         var referencedIds = GetReferencedMediaIds();
-        var referencedKeys = referenceCollector.Collect(cancellationToken);
+        HashSet<Guid> referencedKeys = options.Value.DeepReferenceScan
+            ? referenceCollector.Collect(cancellationToken)
+            : [];
         var fileSystem = mediaFileManager.FileSystem;
 
         var candidates = new List<MediaCandidate>();
