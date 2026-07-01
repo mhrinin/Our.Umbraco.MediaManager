@@ -1,4 +1,4 @@
-export type ScanType = "OrphanedMedia" | "OrphanedFiles";
+export type ScanType = "OrphanedMedia" | "OrphanedFiles" | "BrokenMedia";
 
 export type ScanState =
   | "Queued"

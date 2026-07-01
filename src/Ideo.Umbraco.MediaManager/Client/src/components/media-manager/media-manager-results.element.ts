@@ -76,7 +76,8 @@ export class MediaManagerResultsElement extends UmbLitElement {
   }
 
   get #isMedia(): boolean {
-    return this._activeTab === "OrphanedMedia";
+    // Orphaned files are physical files; every other scan targets media nodes.
+    return this._activeTab !== "OrphanedFiles";
   }
 
   get #config(): UmbTableConfig {
@@ -174,9 +175,7 @@ export class MediaManagerResultsElement extends UmbLitElement {
     return html`
       <uui-box>
         <div class="state">
-          <umb-empty-state size="small">
-            Nothing to clean up here — your ${this.#isMedia ? "media" : "files"} are all in use. 🎉
-          </umb-empty-state>
+          <umb-empty-state size="small">Nothing to clean up here. 🎉</umb-empty-state>
         </div>
       </uui-box>
     `;

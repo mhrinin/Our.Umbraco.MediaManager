@@ -75,6 +75,7 @@ public sealed class ScanJobManager(
             {
                 ScanType.OrphanedMedia => await RunMediaScanAsync(scope, jobId, progress, token),
                 ScanType.OrphanedFiles => await RunFileScanAsync(scope, jobId, progress, token),
+                ScanType.BrokenMedia => await RunBrokenMediaScanAsync(scope, jobId, progress, token),
                 _ => throw new NotSupportedException($"Unknown scan type {status.Type}."),
             };
 
@@ -106,5 +107,13 @@ public sealed class ScanJobManager(
         var scanner = scope.ServiceProvider.GetRequiredService<IOrphanedFileScanner>();
         var files = await scanner.ScanAsync(progress, token);
         return new ScanResult(jobId, ScanType.OrphanedFiles, [], files, files.Sum(candidate => candidate.SizeBytes));
+    }
+
+    private static async Task<ScanResult> RunBrokenMediaScanAsync(IServiceScope scope, Guid jobId, IProgress<int> progress, CancellationToken token)
+    {
+        var scanner = scope.ServiceProvider.GetRequiredService<IBrokenMediaScanner>();
+        var media = await scanner.ScanAsync(progress, token);
+        // Files are already missing, so nothing is reclaimed by cleaning up broken nodes.
+        return new ScanResult(jobId, ScanType.BrokenMedia, media, [], 0);
     }
 }

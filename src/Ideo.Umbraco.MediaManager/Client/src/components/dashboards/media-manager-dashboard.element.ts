@@ -47,9 +47,9 @@ export class MediaManagerDashboardElement extends UmbLitElement {
     if (slice?.state !== "done") {
       return undefined;
     }
-    return type === "OrphanedMedia"
-      ? slice.result?.media.length ?? 0
-      : slice.result?.files.length ?? 0;
+    return type === "OrphanedFiles"
+      ? slice.result?.files.length ?? 0
+      : slice.result?.media.length ?? 0;
   }
 
   #renderTab(type: ScanType, label: string) {
@@ -93,6 +93,7 @@ export class MediaManagerDashboardElement extends UmbLitElement {
 
         <uui-tab-group>
           ${this.#renderTab("OrphanedMedia", "Orphaned media")}
+          ${this.#renderTab("BrokenMedia", "Broken media")}
           ${this.#renderTab("OrphanedFiles", "Orphaned files")}
         </uui-tab-group>
 

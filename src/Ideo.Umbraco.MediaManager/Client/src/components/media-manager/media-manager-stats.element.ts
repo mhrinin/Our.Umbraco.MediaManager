@@ -29,7 +29,11 @@ export class MediaManagerStatsElement extends UmbLitElement {
   get #stats(): Stat[] {
     const media = this._slices?.OrphanedMedia;
     const files = this._slices?.OrphanedFiles;
-    const scanning = media?.state === "scanning" || files?.state === "scanning";
+    const broken = this._slices?.BrokenMedia;
+    const scanning =
+      media?.state === "scanning" ||
+      files?.state === "scanning" ||
+      broken?.state === "scanning";
 
     return [
       {
@@ -38,6 +42,13 @@ export class MediaManagerStatsElement extends UmbLitElement {
         value: `${media?.result?.media.length ?? 0}`,
         description: "Media not referenced by any content.",
         loading: media?.state === "scanning",
+      },
+      {
+        icon: "icon-alert",
+        label: "Broken media",
+        value: `${broken?.result?.media.length ?? 0}`,
+        description: "Media whose file is missing on disk.",
+        loading: broken?.state === "scanning",
       },
       {
         icon: "icon-document",

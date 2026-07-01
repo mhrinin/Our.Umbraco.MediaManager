@@ -29,6 +29,7 @@ export class MediaManagerContext extends UmbControllerBase {
   #slices = new UmbObjectState<Slices>({
     OrphanedMedia: emptySlice(),
     OrphanedFiles: emptySlice(),
+    BrokenMedia: emptySlice(),
   });
   #activeTab = new UmbObjectState<ScanType>("OrphanedMedia");
 
@@ -55,7 +56,11 @@ export class MediaManagerContext extends UmbControllerBase {
   }
 
   async scanAll(): Promise<void> {
-    await Promise.all([this.scan("OrphanedMedia"), this.scan("OrphanedFiles")]);
+    await Promise.all([
+      this.scan("OrphanedMedia"),
+      this.scan("OrphanedFiles"),
+      this.scan("BrokenMedia"),
+    ]);
   }
 
   async scan(type: ScanType): Promise<void> {
@@ -99,10 +104,11 @@ export class MediaManagerContext extends UmbControllerBase {
     }
 
     try {
+      // Orphaned files are physical files; every other scan targets media nodes.
       const result =
-        type === "OrphanedMedia"
-          ? await this.#repository.deleteMedia(ids, false)
-          : await this.#repository.deleteFiles(ids, false);
+        type === "OrphanedFiles"
+          ? await this.#repository.deleteFiles(ids, false)
+          : await this.#repository.deleteMedia(ids, false);
 
       const affected = result?.affected ?? 0;
       const errors = result?.errors ?? [];
@@ -112,7 +118,9 @@ export class MediaManagerContext extends UmbControllerBase {
         },
       });
 
-      await this.scan(type);
+      // A deleted item can appear in more than one scan (e.g. orphaned AND broken), so refresh
+      // every scan to keep all tabs and stat cards consistent.
+      await this.scanAll();
     } catch (error) {
       this.#notification?.peek("danger", { data: { message: "Delete failed." } });
       console.error(error);

@@ -4,4 +4,5 @@ public enum ScanType
 {
     OrphanedMedia,
     OrphanedFiles,
+    BrokenMedia,
 }
