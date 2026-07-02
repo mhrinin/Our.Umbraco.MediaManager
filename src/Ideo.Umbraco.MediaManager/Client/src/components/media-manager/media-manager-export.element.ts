@@ -25,6 +25,14 @@ export class MediaManagerExportElement extends UmbLitElement {
     this.#context?.scan("Export");
   }
 
+  #download(jobId: string, token: string) {
+    // A plain href on the button gets intercepted by the backoffice SPA router (the download
+    // attribute is not forwarded to uui-button's internal anchor), which just changes the URL.
+    // Assigning location directly issues a real request; the attachment response means the
+    // browser starts the download and never leaves the page.
+    window.location.href = exportDownloadUrl(jobId, token);
+  }
+
   override render() {
     const slice = this._slice;
     if (slice?.state === "scanning") {
@@ -107,8 +115,7 @@ export class MediaManagerExportElement extends UmbLitElement {
             <uui-button
               look="primary"
               label="Download ZIP"
-              href=${exportDownloadUrl(jobId, exportInfo.downloadToken)}
-              download
+              @click=${() => this.#download(jobId, exportInfo.downloadToken)}
             >
               <uui-icon name="icon-download-alt"></uui-icon>
               Download ZIP
