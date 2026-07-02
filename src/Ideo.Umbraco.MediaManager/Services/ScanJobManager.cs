@@ -32,11 +32,9 @@ public sealed class ScanJobManager(
                 return existing.Status.Id;
             }
 
-            var job = new ScanJob
-            {
-                Status = new ScanJobStatus { Id = Guid.NewGuid(), Type = type },
-                Cancellation = new CancellationTokenSource(),
-            };
+            var job = new ScanJob(
+                new ScanJobStatus { Id = Guid.NewGuid(), Type = type },
+                new CancellationTokenSource());
 
             var stored = existing is null ? jobs.TryAdd(type, job) : jobs.TryUpdate(type, job, existing);
             if (stored)
@@ -131,11 +129,13 @@ public sealed class ScanJobManager(
         public void Report(int value) => status.Processed = value;
     }
 
-    private sealed class ScanJob
+    // net6.0 lacks the runtime attributes that back C# 'required' members, so a constructor
+    // enforces the mandatory state instead.
+    private sealed class ScanJob(ScanJobStatus status, CancellationTokenSource cancellation)
     {
-        public required ScanJobStatus Status { get; init; }
+        public ScanJobStatus Status { get; } = status;
 
-        public required CancellationTokenSource Cancellation { get; init; }
+        public CancellationTokenSource Cancellation { get; } = cancellation;
 
         public ScanResult? Result { get; set; }
     }

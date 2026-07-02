@@ -6,15 +6,16 @@ namespace Ideo.Umbraco.MediaManager.Services;
 /// Pure, Umbraco-free decision logic for the scanners, extracted so it can be unit-tested
 /// without mocking Umbraco's services.
 /// </summary>
-public static partial class MediaScanLogic
+public static class MediaScanLogic
 {
     public const string CacheDirectoryName = "cache";
 
-    [GeneratedRegex("umb://media/([0-9a-fA-F]{32})", RegexOptions.IgnoreCase)]
-    private static partial Regex MediaUdiRegex();
+    // net6.0 has no [GeneratedRegex] source generator; compiled statics are the equivalent here.
+    private static readonly Regex MediaUdiPattern =
+        new("umb://media/([0-9a-fA-F]{32})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    [GeneratedRegex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")]
-    private static partial Regex GuidRegex();
+    private static readonly Regex GuidPattern =
+        new("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", RegexOptions.Compiled);
 
     /// <summary>
     /// Extracts media keys referenced in a serialized property value — both <c>umb://media/{guid}</c>
@@ -29,7 +30,7 @@ public static partial class MediaScanLogic
             yield break;
         }
 
-        foreach (Match match in MediaUdiRegex().Matches(value))
+        foreach (Match match in MediaUdiPattern.Matches(value))
         {
             if (Guid.TryParseExact(match.Groups[1].Value, "N", out var key))
             {
@@ -37,7 +38,7 @@ public static partial class MediaScanLogic
             }
         }
 
-        foreach (Match match in GuidRegex().Matches(value))
+        foreach (Match match in GuidPattern.Matches(value))
         {
             if (Guid.TryParse(match.Value, out var key))
             {

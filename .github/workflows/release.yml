@@ -3,8 +3,8 @@ name: Release
 on:
   push:
     tags:
-      # v13 line publishes 13.x.y versions only (e.g. v13.0.1); main owns the 16/17 line.
-      - "v13.*"
+      # v10 line publishes 10.x.y versions only (e.g. v10.0.1); main owns 16/17, v13/main owns 13.x.
+      - "v10.*"
 
 jobs:
   publish:
@@ -18,7 +18,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: |
+            6.0.x
+            9.0.x
 
       - name: Derive version from tag
         id: version

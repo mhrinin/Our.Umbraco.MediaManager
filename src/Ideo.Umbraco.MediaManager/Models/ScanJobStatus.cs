@@ -2,9 +2,10 @@ namespace Ideo.Umbraco.MediaManager.Models;
 
 public sealed class ScanJobStatus
 {
-    public required Guid Id { get; init; }
+    // net6.0 lacks the runtime attributes that back C# 'required' members.
+    public Guid Id { get; init; }
 
-    public required ScanType Type { get; init; }
+    public ScanType Type { get; init; }
 
     public ScanState State { get; set; } = ScanState.Queued;
 

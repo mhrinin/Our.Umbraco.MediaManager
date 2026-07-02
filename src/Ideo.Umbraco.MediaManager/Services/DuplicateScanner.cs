@@ -110,8 +110,10 @@ public sealed class DuplicateScanner(
     {
         try
         {
+            // net6.0 lacks SHA256.HashData(Stream); the instance API is the equivalent.
             using var stream = fileSystem.OpenFile(relativePath);
-            return Convert.ToHexString(SHA256.HashData(stream));
+            using var sha256 = SHA256.Create();
+            return Convert.ToHexString(sha256.ComputeHash(stream));
         }
         catch
         {

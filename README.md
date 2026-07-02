@@ -1,6 +1,6 @@
-# Ideo.Umbraco.MediaManager (Umbraco 13 line)
+# Ideo.Umbraco.MediaManager (Umbraco 10 line)
 
-A safe media-cleanup extension for **Umbraco 13 (LTS)** — this branch (`v13/main`) ships the
+A safe media-cleanup extension for **Umbraco 10** — this branch (`v10/main`) ships the
 legacy-backoffice (AngularJS) edition. For **Umbraco 16/17** use the `main` branch / the `17.x`
 package versions.
 
@@ -24,12 +24,16 @@ makes existing "delete unused media" plugins dangerous.
 
 ## Requirements
 
-- Umbraco CMS `13.x` (.NET 8)
+- Umbraco CMS `10.x` (.NET 6)
+
+> Note: Umbraco 10 and .NET 6 have reached end-of-life upstream. This line exists as a convenience
+> for existing v10 sites; new features land on the `main` (Umbraco 16/17) line first, and upgrading
+> Umbraco itself remains the recommended path.
 
 ## Installation
 
 ```bash
-dotnet add package Ideo.Umbraco.MediaManager --version 13.*
+dotnet add package Ideo.Umbraco.MediaManager --version 10.*
 ```
 
 The Media Manager dashboard appears in the backoffice **Media** section.
@@ -52,7 +56,7 @@ draft — for references. Disable on very large sites to fall back to relations 
 ```bash
 # The AngularJS UI is plain source under src/…/wwwroot/App_Plugins/MediaManager — no build step.
 
-# Run the sample host (Umbraco 13, SQLite, unattended install)
+# Run the sample host (Umbraco 10, SQLite, unattended install)
 cd samples/Ideo.Umbraco.MediaManager.Web
 dotnet run
 ```
@@ -61,15 +65,15 @@ dotnet run
 
 ```
 src/Ideo.Umbraco.MediaManager      # the package (C# backend + AngularJS App_Plugins UI)
-samples/…Web                       # local Umbraco 13 host for dev + manual testing
+samples/…Web                       # local Umbraco 10 host for dev + manual testing
 tests/…Tests                       # unit tests
 docs/                              # feature proposal / design notes
 ```
 
 ## Releasing
 
-Push a `v13.*` git tag (e.g. `v13.0.1`); the release workflow packs and publishes to nuget.org
-using **Trusted Publishing** (OIDC) — no stored API key. The `main` branch owns non-13 tags.
+Push a `v10.*` git tag (e.g. `v10.0.1`); the release workflow packs and publishes to nuget.org
+using **Trusted Publishing** (OIDC) — no stored API key. The `main` branch owns 16/17 tags; `v13/main` owns `v13.*`.
 
 ## License
 

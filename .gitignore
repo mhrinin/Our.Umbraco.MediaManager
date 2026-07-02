@@ -17,8 +17,9 @@ project.lock.json
 npm-debug.log*
 .eslintcache
 
-# NOTE (v13 line): App_Plugins/MediaManager is handwritten AngularJS source on this branch
-# and MUST be tracked. (On main it is vite build output and is ignored there.)
+# NOTE (v10 line): src App_Plugins/MediaManager is handwritten AngularJS source and MUST be
+# tracked; the copy inside the sample host is produced on build and is ignored below.
+samples/**/App_Plugins/
 
 # Umbraco sample host runtime
 samples/**/umbraco/Data/

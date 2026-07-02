@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk.Razor">
 
   <PropertyGroup>
-    <!-- Umbraco 13 line (legacy AngularJS backoffice). See main branch for Umbraco 16/17. -->
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- Umbraco 10 line (legacy AngularJS backoffice, net6.0). See main for 16/17, v13/main for 13. -->
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
 
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <IsPackable>true</IsPackable>
@@ -16,7 +16,7 @@
     <Company>Ideo Digital</Company>
     <Product>Ideo.Umbraco.MediaManager</Product>
     <Title>Ideo Umbraco Media Manager</Title>
-    <Description>Safe media cleanup for Umbraco 13: find and remove unused media nodes, duplicates, broken nodes and orphaned physical files, guarded by a deep reference scan, with dry-run preview and Recycle Bin safety.</Description>
+    <Description>Safe media cleanup for Umbraco 10: find and remove unused media nodes, duplicates, broken nodes and orphaned physical files, guarded by a deep reference scan, with dry-run preview and Recycle Bin safety.</Description>
     <PackageDescription>$(Description)</PackageDescription>
     <PackageTags>Umbraco;umbraco-marketplace;Media;Cleanup;Orphaned;Extension</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -24,11 +24,24 @@
     <PackageProjectUrl>https://github.com/mhrinin/Ideo.Umbraco.MediaManager</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mhrinin/Ideo.Umbraco.MediaManager</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
+    <!-- content/ + buildTransitive targets is the intended layout here (see build/*.targets). -->
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Umbraco.Cms.Web.BackOffice" Version="[13.0.0,14.0.0)" />
-    <PackageReference Include="Umbraco.Cms.Web.Website" Version="[13.0.0,14.0.0)" />
+    <PackageReference Include="Umbraco.Cms.Web.BackOffice" Version="[10.0.0,11.0.0)" />
+    <PackageReference Include="Umbraco.Cms.Web.Website" Version="[10.0.0,11.0.0)" />
+  </ItemGroup>
+
+  <!--
+    Umbraco 10 only discovers package.manifest from the site's physical App_Plugins folder, so the
+    UI ships inside the nupkg (content/App_Plugins) and buildTransitive targets copy it into the
+    consuming project on build.
+  -->
+  <ItemGroup>
+    <None Include="App_Plugins\**\*.*" Pack="true" PackagePath="content\App_Plugins\" />
+    <None Include="build\Ideo.Umbraco.MediaManager.targets" Pack="true" PackagePath="build\Ideo.Umbraco.MediaManager.targets" />
+    <None Include="build\Ideo.Umbraco.MediaManager.targets" Pack="true" PackagePath="buildTransitive\Ideo.Umbraco.MediaManager.targets" />
   </ItemGroup>
 
   <ItemGroup>

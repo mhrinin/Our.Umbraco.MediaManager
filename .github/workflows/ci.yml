@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [v13/main]
+    branches: [v10/main]
   pull_request:
-    branches: [v13/main]
+    branches: [v10/main]
 
 jobs:
   build:
@@ -15,7 +15,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: |
+            6.0.x
+            9.0.x
 
       - name: Restore
         run: dotnet restore Ideo.Umbraco.MediaManager.slnx
