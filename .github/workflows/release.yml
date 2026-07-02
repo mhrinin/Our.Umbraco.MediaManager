@@ -3,7 +3,8 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      # v13 line publishes 13.x.y versions only (e.g. v13.0.1); main owns the 16/17 line.
+      - "v13.*"
 
 jobs:
   publish:
@@ -17,33 +18,17 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            9.0.x
-            10.0.x
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: src/Ideo.Umbraco.MediaManager/Client/package-lock.json
+          dotnet-version: "8.0.x"
 
       - name: Derive version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Build frontend
-        working-directory: src/Ideo.Umbraco.MediaManager/Client
-        run: |
-          npm ci
-          npm run build
 
       - name: Pack
         run: >
           dotnet pack src/Ideo.Umbraco.MediaManager/Ideo.Umbraco.MediaManager.csproj
           -c Release
           -p:PackageVersion=${{ steps.version.outputs.version }}
-          -p:SkipClientBuild=true
           -o artifacts
 
       # Exchange the GitHub OIDC token for a short-lived nuget.org API key (Trusted Publishing).

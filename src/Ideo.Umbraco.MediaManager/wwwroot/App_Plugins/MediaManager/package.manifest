@@ -1,0 +1,18 @@
+{
+  "dashboards": [
+    {
+      "alias": "mediaManager.dashboard",
+      "view": "/App_Plugins/MediaManager/dashboard.html",
+      "sections": [ "media" ],
+      "weight": 5,
+      "name": "Media Manager"
+    }
+  ],
+  "javascript": [
+    "/App_Plugins/MediaManager/mediamanager.resource.js",
+    "/App_Plugins/MediaManager/dashboard.controller.js"
+  ],
+  "css": [
+    "/App_Plugins/MediaManager/mediamanager.css"
+  ]
+}

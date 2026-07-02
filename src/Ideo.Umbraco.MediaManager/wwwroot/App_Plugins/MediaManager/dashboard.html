@@ -1,0 +1,141 @@
+<div class="media-manager" ng-controller="MediaManager.DashboardController as vm">
+
+    <div class="media-manager__header">
+        <div>
+            <h1 class="media-manager__title">Media Manager</h1>
+            <p class="media-manager__subtitle">Find and safely remove unused media and orphaned files.</p>
+        </div>
+        <umb-button type="button"
+                    button-style="outline"
+                    label="Rescan"
+                    icon="icon-sync"
+                    disabled="vm.scanning"
+                    action="vm.rescan()">
+        </umb-button>
+    </div>
+
+    <div class="media-manager__stats">
+        <div class="media-manager__card" ng-repeat="t in vm.tabs">
+            <div class="media-manager__card-value">{{ vm.count(t.key) }}</div>
+            <div class="media-manager__card-label"><umb-icon icon="{{t.icon}}"></umb-icon> {{ t.label }}</div>
+            <div class="media-manager__card-desc">{{ t.desc }}</div>
+        </div>
+        <div class="media-manager__card">
+            <div class="media-manager__card-value">{{ vm.reclaimable() }}</div>
+            <div class="media-manager__card-label"><umb-icon icon="icon-trash"></umb-icon> Reclaimable space</div>
+            <div class="media-manager__card-desc">Disk space recovered by cleaning these up.</div>
+        </div>
+    </div>
+
+    <div class="media-manager__tabs">
+        <button type="button" class="media-manager__tab" ng-repeat="t in vm.tabs"
+                ng-class="{ 'media-manager__tab--active': vm.activeTab === t.key }"
+                ng-click="vm.setTab(t.key)">
+            {{ t.label }}
+            <span class="media-manager__pill" ng-class="{ 'media-manager__pill--has': vm.count(t.key) > 0 }">{{ vm.count(t.key) }}</span>
+        </button>
+        <button type="button" class="media-manager__tab"
+                ng-class="{ 'media-manager__tab--active': vm.activeTab === 'StorageReport' }"
+                ng-click="vm.setTab('StorageReport')">
+            Storage report
+        </button>
+    </div>
+
+    <!-- Scan result tables -->
+    <umb-box ng-if="vm.activeTab !== 'StorageReport'">
+        <umb-box-content>
+            <umb-load-indicator ng-if="vm.activeSlice().state === 'scanning'"></umb-load-indicator>
+
+            <div ng-if="vm.activeSlice().state !== 'scanning'">
+                <div class="media-manager__toolbar">
+                    <span>{{ vm.count(vm.activeTab) }} item(s)</span>
+                    <umb-button type="button"
+                                button-style="danger"
+                                label="Move to Recycle Bin"
+                                ng-if="vm.isMediaTab()"
+                                disabled="!vm.anySelected()"
+                                action="vm.deleteSelected()">
+                    </umb-button>
+                    <umb-button type="button"
+                                button-style="danger"
+                                label="Delete files"
+                                ng-if="!vm.isMediaTab()"
+                                disabled="!vm.anySelected()"
+                                action="vm.deleteSelected()">
+                    </umb-button>
+                </div>
+
+                <div class="media-manager__empty" ng-if="vm.count(vm.activeTab) === 0">
+                    Nothing to clean up here. &#127881;
+                </div>
+
+                <table class="media-manager__table" ng-if="vm.count(vm.activeTab) > 0">
+                    <thead>
+                        <tr>
+                            <th class="media-manager__check"><input type="checkbox" ng-checked="vm.allSelected()" ng-click="vm.toggleAll()" /></th>
+                            <th ng-if="vm.isMediaTab()">Name</th>
+                            <th>Path</th>
+                            <th class="media-manager__size">Size</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr ng-repeat="item in vm.activeSlice().items">
+                            <td class="media-manager__check"><input type="checkbox" ng-model="item.selected" /></td>
+                            <td ng-if="vm.isMediaTab()">
+                                <a href="" ng-click="vm.openMedia(item)">{{ item.name }}</a>
+                            </td>
+                            <td class="media-manager__path">{{ item.path }}</td>
+                            <td class="media-manager__size">{{ vm.formatBytes(item.sizeBytes) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </umb-box-content>
+    </umb-box>
+
+    <!-- Storage report -->
+    <div ng-if="vm.activeTab === 'StorageReport'">
+        <umb-box>
+            <umb-box-content>
+                <umb-load-indicator ng-if="vm.reportLoading"></umb-load-indicator>
+                <div ng-if="!vm.reportLoading && vm.report">
+                    <div class="media-manager__total">{{ vm.formatBytes(vm.report.totalBytes) }}</div>
+                    <div class="media-manager__card-desc">across {{ vm.report.totalCount }} media files</div>
+                </div>
+            </umb-box-content>
+        </umb-box>
+
+        <umb-box ng-if="!vm.reportLoading && vm.report">
+            <umb-box-header title="By media type"></umb-box-header>
+            <umb-box-content>
+                <table class="media-manager__table">
+                    <thead><tr><th>Media type</th><th>Items</th><th class="media-manager__size">Size</th></tr></thead>
+                    <tbody>
+                        <tr ng-repeat="row in vm.report.byType">
+                            <td><umb-icon icon="{{row.icon}}"></umb-icon> {{ row.typeAlias }}</td>
+                            <td>{{ row.count }}</td>
+                            <td class="media-manager__size">{{ vm.formatBytes(row.bytes) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </umb-box-content>
+        </umb-box>
+
+        <umb-box ng-if="!vm.reportLoading && vm.report">
+            <umb-box-header title="Largest files"></umb-box-header>
+            <umb-box-content>
+                <table class="media-manager__table">
+                    <thead><tr><th>Name</th><th>Path</th><th class="media-manager__size">Size</th></tr></thead>
+                    <tbody>
+                        <tr ng-repeat="item in vm.report.largest">
+                            <td>{{ item.name }}</td>
+                            <td class="media-manager__path">{{ item.path }}</td>
+                            <td class="media-manager__size">{{ vm.formatBytes(item.sizeBytes) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </umb-box-content>
+        </umb-box>
+    </div>
+
+</div>

@@ -1,0 +1,153 @@
+.media-manager {
+    padding: 20px;
+    max-width: 1400px;
+}
+
+.media-manager__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.media-manager__title {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.media-manager__subtitle {
+    margin: 4px 0 0;
+    color: #68676b;
+}
+
+.media-manager__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.media-manager__card {
+    background: #fff;
+    border: 1px solid #e9e9eb;
+    border-radius: 6px;
+    padding: 16px 18px;
+}
+
+.media-manager__card-value {
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.media-manager__card-label {
+    margin-top: 6px;
+    font-weight: 700;
+}
+
+.media-manager__card-desc {
+    margin-top: 4px;
+    color: #68676b;
+    font-size: 13px;
+}
+
+.media-manager__tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid #e9e9eb;
+    margin-bottom: 16px;
+}
+
+.media-manager__tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #1b264f;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.media-manager__tab--active {
+    border-bottom-color: #f5c1bc;
+    font-weight: 700;
+}
+
+.media-manager__pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 700;
+    background: #f0f0f2;
+    color: #68676b;
+}
+
+.media-manager__pill--has {
+    background: #d42054;
+    color: #fff;
+}
+
+.media-manager__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.media-manager__empty {
+    padding: 24px;
+    text-align: center;
+    color: #68676b;
+}
+
+.media-manager__table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.media-manager__table th,
+.media-manager__table td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f0f2;
+    vertical-align: middle;
+}
+
+.media-manager__table th {
+    font-weight: 700;
+    color: #1b264f;
+}
+
+.media-manager__check {
+    width: 36px;
+}
+
+.media-manager__size {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.media-manager__path {
+    color: #68676b;
+    font-family: monospace;
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.media-manager__total {
+    font-size: 30px;
+    font-weight: 700;
+}

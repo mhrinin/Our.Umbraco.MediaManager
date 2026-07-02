@@ -1,24 +1,32 @@
 using Ideo.Umbraco.MediaManager.Interfaces;
 using Ideo.Umbraco.MediaManager.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Umbraco.Cms.Web.BackOffice.Controllers;
 using Umbraco.Cms.Web.Common.Attributes;
+using Umbraco.Cms.Web.Common.Authorization;
 
 namespace Ideo.Umbraco.MediaManager.Controllers;
 
 /// <summary>
 /// Umbraco 13 legacy backoffice API. Routes resolve to
-/// <c>/umbraco/backoffice/MediaManager/MediaManager/{action}</c> and are protected by the backoffice
-/// authentication that <see cref="UmbracoAuthorizedApiController"/> enforces.
+/// <c>/umbraco/backoffice/MediaManager/MediaManager/{action}</c>. Deriving from
+/// <see cref="UmbracoAuthorizedJsonController"/> enforces backoffice authentication plus the Angular
+/// anti-forgery token on every action; the whole API additionally requires Media section access, and
+/// physical file deletion (irreversible) requires Settings section access, mirroring the v16/17 line.
 /// </summary>
 [PluginController("MediaManager")]
+[Authorize(Policy = AuthorizationPolicies.SectionAccessMedia)]
 public sealed class MediaManagerController(
     IScanJobManager scanJobManager,
     ICleanupService cleanupService,
-    IStorageReportService storageReportService) : UmbracoAuthorizedApiController
+    IStorageReportService storageReportService) : UmbracoAuthorizedJsonController
 {
     [HttpPost]
-    public IActionResult StartScan(ScanType type) => Ok(new { jobId = scanJobManager.StartScan(type) });
+    public IActionResult StartScan(ScanType type)
+        => Enum.IsDefined(type)
+            ? Ok(new { jobId = scanJobManager.StartScan(type) })
+            : BadRequest($"Unknown scan type '{type}'.");
 
     [HttpGet]
     public IActionResult GetStatus(Guid jobId)
@@ -42,6 +50,7 @@ public sealed class MediaManagerController(
         => Ok(await cleanupService.DeleteMediaAsync(request.Keys, request.DryRun));
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.SectionAccessSettings)]
     public async Task<IActionResult> DeleteFiles([FromBody] DeleteFilesRequest request)
         => Ok(await cleanupService.DeleteFilesAsync(request.Paths, request.DryRun));
 
