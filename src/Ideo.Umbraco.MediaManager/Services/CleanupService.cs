@@ -12,25 +12,37 @@ public sealed class CleanupService(
     IMediaEditingService mediaEditingService,
     MediaFileManager mediaFileManager,
     IAuditService auditService,
-    IBackOfficeSecurityAccessor backOfficeSecurityAccessor,
-    IScanJobManager scanJobManager) : ICleanupService
+    IBackOfficeSecurityAccessor backOfficeSecurityAccessor) : ICleanupService
 {
     private const string MediaEntityType = "media";
     private const string MediaFileEntityType = "media-file";
 
-    public async Task<CleanupResult> DeleteMediaAsync(IReadOnlyList<Guid> keys, bool dryRun)
-    {
-        if (dryRun)
-        {
-            return new CleanupResult(keys.Count, []);
-        }
+    public async Task<CleanupResult> DeleteItemsAsync(ScanResult scanResult, IReadOnlyList<string> ids, bool dryRun)
+        => scanResult.Type == ScanType.OrphanedFiles
+            ? await DeleteFilesAsync(scanResult, ids, dryRun)
+            : await DeleteMediaAsync(scanResult, ids, dryRun);
 
+    private async Task<CleanupResult> DeleteMediaAsync(ScanResult scanResult, IReadOnlyList<string> ids, bool dryRun)
+    {
+        var allowedIds = scanResult.Items.Select(item => item.Id).ToHashSet();
         var userKey = CurrentUserKey();
         var errors = new List<string>();
         var affected = 0;
 
-        foreach (var key in keys)
+        foreach (var id in ids)
         {
+            if (!allowedIds.Contains(id) || !Guid.TryParse(id, out var key))
+            {
+                errors.Add($"Media '{id}' is not part of the scan result and was skipped.");
+                continue;
+            }
+
+            if (dryRun)
+            {
+                affected++;
+                continue;
+            }
+
             var attempt = await mediaEditingService.MoveToRecycleBinAsync(key, userKey);
             if (!attempt.Success || attempt.Result is null)
             {
@@ -48,22 +60,13 @@ public sealed class CleanupService(
         return new CleanupResult(affected, errors);
     }
 
-    public async Task<CleanupResult> DeleteFilesAsync(Guid jobId, IReadOnlyList<string> paths, bool dryRun)
+    private async Task<CleanupResult> DeleteFilesAsync(ScanResult scanResult, IReadOnlyList<string> ids, bool dryRun)
     {
-        // The stored scan result is the allowlist: only files the orphaned-files scan actually
-        // flagged can be deleted, never arbitrary paths supplied by the client.
-        var scanResult = scanJobManager.GetResult(jobId);
-        if (scanResult is null || scanResult.Type != ScanType.OrphanedFiles)
-        {
-            return new CleanupResult(0, ["The orphaned-files scan result is no longer available. Rescan and try again."]);
-        }
-
-        var allowedPaths = scanResult.Files.Select(file => file.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var fileSystem = mediaFileManager.FileSystem;
+        var allowedPaths = scanResult.Items.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var errors = new List<string>();
         var affected = 0;
 
-        foreach (var path in paths)
+        foreach (var path in ids)
         {
             if (!allowedPaths.Contains(path))
             {
@@ -73,6 +76,7 @@ public sealed class CleanupService(
 
             try
             {
+                var fileSystem = mediaFileManager.FileSystem;
                 if (!fileSystem.FileExists(path))
                 {
                     errors.Add($"File '{path}' was not found.");

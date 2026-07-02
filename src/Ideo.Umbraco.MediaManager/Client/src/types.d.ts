@@ -28,26 +28,29 @@ export interface ScanJobStatus {
   error: string | null;
 }
 
-export interface MediaCandidate {
-  key: string;
+export interface ScanItem {
+  id: string;
   name: string;
   path: string | null;
   sizeBytes: number;
 }
 
-export interface FileCandidate {
-  path: string;
-  sizeBytes: number;
-}
-
-export interface ScanResult {
+export interface ScanResultSummary {
   jobId: string;
   type: ScanType;
-  media: MediaCandidate[];
-  files: FileCandidate[];
+  totalItems: number;
   reclaimableBytes: number;
   report: StorageReport | null;
   export: ExportInfo | null;
+}
+
+export interface ScanResultItems {
+  total: number;
+  items: ScanItem[];
+}
+
+export interface ReclaimableSpaceResponse {
+  reclaimableBytes: number;
 }
 
 export interface ExportInfo {
@@ -75,5 +78,5 @@ export interface StorageReport {
   totalBytes: number;
   totalCount: number;
   byType: StorageTypeBreakdown[];
-  largest: MediaCandidate[];
+  largest: ScanItem[];
 }

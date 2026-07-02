@@ -30,7 +30,7 @@ public sealed class OrphanedFileScanner(
             }
         }
 
-        var candidates = new List<FileCandidate>();
+        var candidates = new List<ScanItem>();
         foreach (var relativePath in MediaFileWalker.Walk(fileSystem, cancellationToken))
         {
             if (ownedPaths.Contains(NormalizeSeparators(relativePath)))
@@ -38,10 +38,10 @@ public sealed class OrphanedFileScanner(
                 continue;
             }
 
-            candidates.Add(new FileCandidate(relativePath, fileSystem.GetSize(relativePath)));
+            candidates.Add(ScanItem.ForFile(relativePath, fileSystem.GetSize(relativePath)));
         }
 
-        return Task.FromResult(new ScanResult(jobId, Type, [], candidates, candidates.Sum(candidate => candidate.SizeBytes)));
+        return Task.FromResult(new ScanResult(jobId, Type, candidates, candidates.Sum(candidate => candidate.SizeBytes)));
     }
 
     private static string? ToRelativePath(IFileSystem fileSystem, string mediaPath)

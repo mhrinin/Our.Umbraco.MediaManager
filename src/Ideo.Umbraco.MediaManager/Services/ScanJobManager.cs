@@ -53,6 +53,8 @@ public sealed class ScanJobManager(
 
     public ScanResult? GetResult(Guid jobId) => Find(jobId)?.Result;
 
+    public ScanResult? GetLatestResult(ScanType type) => jobs.TryGetValue(type, out var job) ? job.Result : null;
+
     public bool Cancel(Guid jobId)
     {
         var job = Find(jobId);
@@ -101,7 +103,7 @@ public sealed class ScanJobManager(
             var result = await scan.RunAsync(status.Id, new StatusProgress(status), linked.Token);
 
             job.Result = result;
-            status.FoundCount = result.Media.Count + result.Files.Count;
+            status.FoundCount = result.Items.Count;
             status.State = ScanState.Completed;
         }
         catch (OperationCanceledException)

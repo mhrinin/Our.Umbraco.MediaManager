@@ -4,4 +4,4 @@ public sealed record StorageReport(
     long TotalBytes,
     int TotalCount,
     IReadOnlyList<StorageTypeBreakdown> ByType,
-    IReadOnlyList<MediaCandidate> Largest);
+    IReadOnlyList<ScanItem> Largest);

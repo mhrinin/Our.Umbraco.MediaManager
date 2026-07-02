@@ -47,7 +47,8 @@ dotnet add package Ideo.Umbraco.MediaManager
 dotnet add package Ideo.Umbraco.MediaManager --version 13.*
 ```
 
-The Media Manager dashboard appears in the backoffice **Media** section.
+The Media Manager dashboard appears in the backoffice **Settings** section (Settings section
+access is required to use it).
 
 ## Configuration
 

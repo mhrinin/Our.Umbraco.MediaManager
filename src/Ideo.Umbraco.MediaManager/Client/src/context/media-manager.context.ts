@@ -1,25 +1,39 @@
 import { UmbControllerBase } from "@umbraco-cms/backoffice/class-api";
-import { UmbObjectState } from "@umbraco-cms/backoffice/observable-api";
+import { UmbNumberState, UmbObjectState } from "@umbraco-cms/backoffice/observable-api";
 import type { UmbControllerHost } from "@umbraco-cms/backoffice/controller-api";
 import { UMB_NOTIFICATION_CONTEXT } from "@umbraco-cms/backoffice/notification";
 import type { UmbNotificationContext } from "@umbraco-cms/backoffice/notification";
 import { MediaManagerRepository } from "../services/media-manager.repository.js";
-import type { MediaManagerTab, ScanResult, ScanType } from "../types.d.js";
+import type { MediaManagerTab, ScanItem, ScanResultSummary, ScanType } from "../types.d.js";
 
 export type ScanState = "idle" | "scanning" | "done" | "failed";
 
 export interface ScanSlice {
   state: ScanState;
   processed: number;
-  result?: ScanResult;
+  result?: ScanResultSummary;
+  /** 1-based page currently loaded into pageItems. */
+  page: number;
+  pageItems: ScanItem[];
   selected: string[];
+  /** "Select all N" across pages: the server resolves the targets from the scan result. */
+  allSelected: boolean;
 }
 
 export type Slices = Record<ScanType, ScanSlice>;
 
+export const PAGE_SIZE = 50;
+
 const CLEANUP_SCAN_TYPES: ScanType[] = ["UnusedMedia", "OrphanedFiles", "BrokenMedia", "Duplicates"];
 
-const emptySlice = (): ScanSlice => ({ state: "idle", processed: 0, selected: [] });
+const emptySlice = (): ScanSlice => ({
+  state: "idle",
+  processed: 0,
+  page: 1,
+  pageItems: [],
+  selected: [],
+  allSelected: false,
+});
 
 const POLL_INTERVAL_MS = 1000;
 // Job state is in-memory server-side; this many consecutive missing statuses means the job was
@@ -41,9 +55,12 @@ export class MediaManagerContext extends UmbControllerBase {
     Export: emptySlice(),
   });
   #activeTab = new UmbObjectState<MediaManagerTab>("UnusedMedia");
+  // Computed server-side across scans (an item can be unused AND a duplicate; counted once).
+  #reclaimableBytes = new UmbNumberState(0);
 
   readonly slices = this.#slices.asObservable();
   readonly activeTab = this.#activeTab.asObservable();
+  readonly reclaimableBytes = this.#reclaimableBytes.asObservable();
   readonly isScanning = this.#slices.asObservablePart((slices) =>
     Object.values(slices).some((slice) => slice.state === "scanning"),
   );
@@ -76,7 +93,31 @@ export class MediaManagerContext extends UmbControllerBase {
   }
 
   setSelection(type: ScanType, selected: string[]): void {
-    this.#patch(type, { selected });
+    this.#patch(type, { selected, allSelected: false });
+  }
+
+  selectAll(type: ScanType): void {
+    this.#patch(type, { selected: [], allSelected: true });
+  }
+
+  async loadPage(type: ScanType, page: number): Promise<void> {
+    const slice = this.#slices.getValue()[type];
+    const jobId = slice.result?.jobId;
+    if (!jobId || slice.state !== "done") {
+      return;
+    }
+
+    const signal = this.#aborters.get(type)?.signal;
+    const items = await this.#repository.getResultItems(jobId, (page - 1) * PAGE_SIZE, PAGE_SIZE, signal);
+    if (signal?.aborted) {
+      return;
+    }
+    if (!items) {
+      this.#fail(type, "The scan result is no longer available. Please rescan.");
+      return;
+    }
+
+    this.#patch(type, { page, pageItems: items.items });
   }
 
   async scanAll(): Promise<void> {
@@ -98,7 +139,15 @@ export class MediaManagerContext extends UmbControllerBase {
     this.#aborters.set(type, aborter);
     const signal = aborter.signal;
 
-    this.#patch(type, { state: "scanning", processed: 0, result: undefined, selected: [] });
+    this.#patch(type, {
+      state: "scanning",
+      processed: 0,
+      result: undefined,
+      page: 1,
+      pageItems: [],
+      selected: [],
+      allSelected: false,
+    });
 
     try {
       const jobId = await this.#repository.startScan(type, signal);
@@ -127,15 +176,7 @@ export class MediaManagerContext extends UmbControllerBase {
         this.#patch(type, { processed: status.processed });
 
         if (status.state === "Completed") {
-          const result = (await this.#repository.getResult(jobId, signal)) ?? undefined;
-          if (signal.aborted) {
-            return;
-          }
-          if (!result) {
-            this.#fail(type, "The scan result could not be retrieved. Please rescan.");
-            return;
-          }
-          this.#patch(type, { state: "done", result });
+          await this.#completeScan(type, jobId, signal);
           return;
         }
 
@@ -154,18 +195,22 @@ export class MediaManagerContext extends UmbControllerBase {
 
   async deleteSelected(type: ScanType): Promise<void> {
     const slice = this.#slices.getValue()[type];
-    const ids = slice.selected;
-    if (ids.length === 0) {
+    const { selected, allSelected } = slice;
+    if (!allSelected && selected.length === 0) {
+      return;
+    }
+
+    const jobId = slice.result?.jobId;
+    if (!jobId) {
       return;
     }
 
     try {
-      // Orphaned files are physical files, validated server-side against the scan result
-      // identified by jobId; every other scan targets media nodes.
-      const result =
-        type === "OrphanedFiles"
-          ? await this.#repository.deleteFiles(slice.result?.jobId ?? "", ids, false)
-          : await this.#repository.deleteMedia(ids, false);
+      // Every id is validated server-side against the scan result identified by jobId; with
+      // allSelected the server resolves the full target list from that same result.
+      const result = allSelected
+        ? await this.#repository.deleteAll(jobId, false)
+        : await this.#repository.deleteItems(jobId, selected, false);
 
       const affected = result?.affected ?? 0;
       const errors = result?.errors ?? [];
@@ -181,6 +226,40 @@ export class MediaManagerContext extends UmbControllerBase {
     } catch (error) {
       this.#notification?.peek("danger", { data: { message: "Delete failed." } });
       console.error(error);
+    }
+  }
+
+  async #completeScan(type: ScanType, jobId: string, signal: AbortSignal): Promise<void> {
+    const result = (await this.#repository.getResult(jobId, signal)) ?? undefined;
+    if (signal.aborted) {
+      return;
+    }
+    if (!result) {
+      this.#fail(type, "The scan result could not be retrieved. Please rescan.");
+      return;
+    }
+
+    const isCleanup = CLEANUP_SCAN_TYPES.includes(type);
+    let pageItems: ScanItem[] = [];
+    if (isCleanup) {
+      const page = await this.#repository.getResultItems(jobId, 0, PAGE_SIZE, signal);
+      if (signal.aborted) {
+        return;
+      }
+      pageItems = page?.items ?? [];
+    }
+
+    this.#patch(type, { state: "done", result, page: 1, pageItems });
+
+    if (isCleanup) {
+      void this.#refreshReclaimable(signal);
+    }
+  }
+
+  async #refreshReclaimable(signal: AbortSignal): Promise<void> {
+    const bytes = await this.#repository.getReclaimableBytes(signal);
+    if (bytes !== null && !signal.aborted) {
+      this.#reclaimableBytes.setValue(bytes);
     }
   }
 

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Ideo.Umbraco.MediaManager.Models;
 
 namespace Ideo.Umbraco.MediaManager.Services;
 
@@ -59,6 +60,23 @@ public static partial class MediaScanLogic
     /// </summary>
     public static string ToZipEntryName(string relativePath)
         => relativePath.Replace('\\', '/').TrimStart('/');
+
+    /// <summary>
+    /// Total disk space recovered by cleaning everything up. An item can be both unused AND a
+    /// duplicate copy; its size is counted once.
+    /// </summary>
+    public static long ComputeReclaimableBytes(ScanResult? unused, ScanResult? orphaned, ScanResult? duplicates)
+    {
+        var unusedIds = (unused?.Items ?? []).Select(item => item.Id).ToHashSet();
+        var overlapBytes = (duplicates?.Items ?? [])
+            .Where(item => unusedIds.Contains(item.Id))
+            .Sum(item => item.SizeBytes);
+
+        return (unused?.ReclaimableBytes ?? 0)
+            + (orphaned?.ReclaimableBytes ?? 0)
+            + (duplicates?.ReclaimableBytes ?? 0)
+            - overlapBytes;
+    }
 
     /// <summary>The ImageSharp/media cache directory holds regenerable variants and must never be treated as orphaned.</summary>
     public static bool IsCacheDirectory(string directory)

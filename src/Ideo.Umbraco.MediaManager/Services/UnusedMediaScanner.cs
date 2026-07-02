@@ -31,7 +31,7 @@ public sealed class UnusedMediaScanner(
             : [];
         var fileSystem = mediaFileManager.FileSystem;
 
-        var candidates = new List<MediaCandidate>();
+        var candidates = new List<ScanItem>();
         foreach (var media in MediaEntityPager.Page(entityService, includeTrashed: false, progress, cancellationToken))
         {
             if (!MediaScanLogic.IsUnusedMedia(media.Id, media.MediaPath, media.Trashed, referencedIds))
@@ -45,14 +45,14 @@ public sealed class UnusedMediaScanner(
                 continue;
             }
 
-            candidates.Add(new MediaCandidate(
+            candidates.Add(ScanItem.ForMedia(
                 media.Key,
                 media.Name ?? string.Empty,
                 media.MediaPath,
                 GetSize(fileSystem, media.MediaPath!)));
         }
 
-        return Task.FromResult(new ScanResult(jobId, Type, candidates, [], candidates.Sum(candidate => candidate.SizeBytes)));
+        return Task.FromResult(new ScanResult(jobId, Type, candidates, candidates.Sum(candidate => candidate.SizeBytes)));
     }
 
     private HashSet<int> GetReferencedMediaIds()

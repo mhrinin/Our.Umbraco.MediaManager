@@ -77,7 +77,7 @@ public sealed class MediaExportService(
             errors,
             skippedCount);
 
-        return Task.FromResult(new ScanResult(jobId, Type, [], [], 0, null, export));
+        return Task.FromResult(new ScanResult(jobId, Type, [], 0, null, export));
     }
 
     private static void TryDelete(string path)

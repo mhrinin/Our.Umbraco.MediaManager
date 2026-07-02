@@ -10,7 +10,7 @@ namespace Ideo.Umbraco.MediaManager.Controllers;
 
 [ApiController]
 [BackOfficeRoute($"{Constants.BackOfficeRoute}/api/v{{version:apiVersion}}")]
-[Authorize(Policy = AuthorizationPolicies.SectionAccessMedia)]
+[Authorize(Policy = AuthorizationPolicies.SectionAccessSettings)]
 [MapToApi(Constants.ApiName)]
 [JsonOptionsName(UmbracoConstants.JsonOptionsNames.BackOffice)]
 public abstract class MediaManagerApiControllerBase : ControllerBase;

@@ -49,9 +49,7 @@ export class MediaManagerDashboardElement extends UmbLitElement {
     if (slice?.state !== "done") {
       return undefined;
     }
-    return type === "OrphanedFiles"
-      ? slice.result?.files.length ?? 0
-      : slice.result?.media.length ?? 0;
+    return slice.result?.totalItems ?? 0;
   }
 
   #renderActivePanel() {

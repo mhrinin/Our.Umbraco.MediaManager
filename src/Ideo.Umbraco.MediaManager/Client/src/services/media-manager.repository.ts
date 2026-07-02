@@ -3,8 +3,10 @@ import { umbHttpClient } from "@umbraco-cms/backoffice/http-client";
 import type { UmbControllerHost } from "@umbraco-cms/backoffice/controller-api";
 import type {
   CleanupResult,
+  ReclaimableSpaceResponse,
   ScanJobStatus,
-  ScanResult,
+  ScanResultItems,
+  ScanResultSummary,
   ScanType,
   StartScanResponse,
 } from "../types.d.js";
@@ -58,10 +60,10 @@ export class MediaManagerRepository {
     return data ?? null;
   }
 
-  async getResult(jobId: string, signal?: AbortSignal): Promise<ScanResult | null> {
+  async getResult(jobId: string, signal?: AbortSignal): Promise<ScanResultSummary | null> {
     const { data } = await tryExecute(
       this.host,
-      umbHttpClient.get<ScanResult>({
+      umbHttpClient.get<ScanResultSummary>({
         url: `${this.apiBaseUrl}/scan/${jobId}/result`,
         security: [...BEARER],
       }),
@@ -70,12 +72,41 @@ export class MediaManagerRepository {
     return data ?? null;
   }
 
-  async deleteMedia(keys: string[], dryRun: boolean): Promise<CleanupResult | null> {
+  async getResultItems(
+    jobId: string,
+    skip: number,
+    take: number,
+    signal?: AbortSignal,
+  ): Promise<ScanResultItems | null> {
+    const { data } = await tryExecute(
+      this.host,
+      umbHttpClient.get<ScanResultItems>({
+        url: `${this.apiBaseUrl}/scan/${jobId}/result/items?skip=${skip}&take=${take}`,
+        security: [...BEARER],
+      }),
+      { disableNotifications: true, abortSignal: signal },
+    );
+    return data ?? null;
+  }
+
+  async getReclaimableBytes(signal?: AbortSignal): Promise<number | null> {
+    const { data } = await tryExecute(
+      this.host,
+      umbHttpClient.get<ReclaimableSpaceResponse>({
+        url: `${this.apiBaseUrl}/scan/reclaimable`,
+        security: [...BEARER],
+      }),
+      { disableNotifications: true, abortSignal: signal },
+    );
+    return data?.reclaimableBytes ?? null;
+  }
+
+  async deleteItems(jobId: string, ids: string[], dryRun: boolean): Promise<CleanupResult | null> {
     const { data, error } = await tryExecute(
       this.host,
       umbHttpClient.post<CleanupResult>({
-        url: `${this.apiBaseUrl}/cleanup/media`,
-        body: { keys, dryRun },
+        url: `${this.apiBaseUrl}/cleanup/scan/${jobId}`,
+        body: { ids, dryRun },
         security: [...BEARER],
       }),
       { disableNotifications: true },
@@ -84,12 +115,12 @@ export class MediaManagerRepository {
     return data ?? null;
   }
 
-  async deleteFiles(jobId: string, paths: string[], dryRun: boolean): Promise<CleanupResult | null> {
+  async deleteAll(jobId: string, dryRun: boolean): Promise<CleanupResult | null> {
     const { data, error } = await tryExecute(
       this.host,
       umbHttpClient.post<CleanupResult>({
-        url: `${this.apiBaseUrl}/cleanup/files`,
-        body: { jobId, paths, dryRun },
+        url: `${this.apiBaseUrl}/cleanup/scan/${jobId}/all`,
+        body: { dryRun },
         security: [...BEARER],
       }),
       { disableNotifications: true },

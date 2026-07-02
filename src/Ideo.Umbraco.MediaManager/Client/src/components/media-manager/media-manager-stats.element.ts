@@ -18,6 +18,7 @@ const FAILED_VALUE = "—";
 @customElement("media-manager-stats")
 export class MediaManagerStatsElement extends UmbLitElement {
   @state() private _slices?: Slices;
+  @state() private _reclaimableBytes = 0;
 
   constructor() {
     super();
@@ -25,26 +26,11 @@ export class MediaManagerStatsElement extends UmbLitElement {
       this.observe(context?.slices, (slices) => {
         this._slices = slices;
       });
+      // An item can be both unused AND a duplicate copy; the server counts its size once.
+      this.observe(context?.reclaimableBytes, (bytes) => {
+        this._reclaimableBytes = bytes ?? 0;
+      });
     });
-  }
-
-  // An item can be both unused AND a duplicate copy; count its size once.
-  get #reclaimableBytes(): number {
-    const media = this._slices?.UnusedMedia.result;
-    const files = this._slices?.OrphanedFiles.result;
-    const duplicates = this._slices?.Duplicates.result;
-
-    const unusedKeys = new Set((media?.media ?? []).map((candidate) => candidate.key));
-    const duplicateOverlap = (duplicates?.media ?? [])
-      .filter((candidate) => unusedKeys.has(candidate.key))
-      .reduce((sum, candidate) => sum + candidate.sizeBytes, 0);
-
-    return (
-      (media?.reclaimableBytes ?? 0) +
-      (files?.reclaimableBytes ?? 0) +
-      (duplicates?.reclaimableBytes ?? 0) -
-      duplicateOverlap
-    );
   }
 
   #countStat(slice: ScanSlice | undefined, count: number): string {
@@ -64,35 +50,35 @@ export class MediaManagerStatsElement extends UmbLitElement {
       {
         icon: "icon-picture",
         label: "Unused media",
-        value: this.#countStat(media, media?.result?.media.length ?? 0),
+        value: this.#countStat(media, media?.result?.totalItems ?? 0),
         description: "Media not referenced by any content.",
         loading: media?.state === "scanning",
       },
       {
         icon: "icon-documents",
         label: "Duplicates",
-        value: this.#countStat(duplicates, duplicates?.result?.media.length ?? 0),
+        value: this.#countStat(duplicates, duplicates?.result?.totalItems ?? 0),
         description: "Redundant copies of identical files.",
         loading: duplicates?.state === "scanning",
       },
       {
         icon: "icon-alert",
         label: "Broken media",
-        value: this.#countStat(broken, broken?.result?.media.length ?? 0),
+        value: this.#countStat(broken, broken?.result?.totalItems ?? 0),
         description: "Media whose file is missing on disk.",
         loading: broken?.state === "scanning",
       },
       {
         icon: "icon-document",
         label: "Orphaned files",
-        value: this.#countStat(files, files?.result?.files.length ?? 0),
+        value: this.#countStat(files, files?.result?.totalItems ?? 0),
         description: "Files on disk with no matching media item.",
         loading: files?.state === "scanning",
       },
       {
         icon: "icon-trash",
         label: "Reclaimable space",
-        value: anyFailed ? FAILED_VALUE : formatBytes(this.#reclaimableBytes),
+        value: anyFailed ? FAILED_VALUE : formatBytes(this._reclaimableBytes),
         description: "Disk space recovered by cleaning these up.",
         loading: scanning,
       },

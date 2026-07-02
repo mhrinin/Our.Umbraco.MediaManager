@@ -1,4 +1,5 @@
-import { css, html, state, customElement } from "@umbraco-cms/backoffice/external/lit";
+import { css, html, nothing, state, customElement } from "@umbraco-cms/backoffice/external/lit";
+import type { UUIPaginationElement } from "@umbraco-cms/backoffice/external/uui";
 import { UmbLitElement } from "@umbraco-cms/backoffice/lit-element";
 import { umbConfirmModal } from "@umbraco-cms/backoffice/modal";
 import { UmbModalRouteRegistrationController } from "@umbraco-cms/backoffice/router";
@@ -15,19 +16,17 @@ import type {
   UmbTableItem,
 } from "@umbraco-cms/backoffice/components";
 import { MEDIA_MANAGER_CONTEXT } from "../../context/media-manager.context-token.js";
+import { PAGE_SIZE } from "../../context/media-manager.context.js";
 import type { MediaManagerContext, ScanSlice } from "../../context/media-manager.context.js";
 import type { ScanType } from "../../types.d.js";
 import { formatBytes } from "../../utils/format.js";
+import "./media-manager-media-grid.element.js";
+import type { MediaManagerMediaGridElement } from "./media-manager-media-grid.element.js";
 
 type ModalRouteBuilder = (params: Record<string, string | number> | null) => string;
 
-const MEDIA_COLUMNS: UmbTableColumn[] = [
+const COLUMNS: UmbTableColumn[] = [
   { name: "Name", alias: "name" },
-  { name: "Path", alias: "path" },
-  { name: "Size", alias: "size" },
-];
-
-const FILE_COLUMNS: UmbTableColumn[] = [
   { name: "Path", alias: "path" },
   { name: "Size", alias: "size" },
 ];
@@ -74,59 +73,75 @@ export class MediaManagerResultsElement extends UmbLitElement {
     return this._activeTab !== "OrphanedFiles";
   }
 
+  get #isGridView(): boolean {
+    // Unused media and duplicates exist as viewable media — show them as native preview cards.
+    // Broken media has no file to preview and orphaned files are not media: they keep the table.
+    return this._activeTab === "UnusedMedia" || this._activeTab === "Duplicates";
+  }
+
   get #config(): UmbTableConfig {
     return { allowSelection: true, hideIcon: false };
   }
 
-  get #columns(): UmbTableColumn[] {
-    return this.#isMedia ? MEDIA_COLUMNS : FILE_COLUMNS;
+  get #total(): number {
+    return this._slice?.result?.totalItems ?? 0;
   }
 
-  get #items(): UmbTableItem[] {
-    const result = this._slice?.result;
-    if (!result) {
-      return [];
-    }
+  get #pageCount(): number {
+    return Math.max(1, Math.ceil(this.#total / PAGE_SIZE));
+  }
 
-    if (this.#isMedia) {
-      return result.media.map((m) => ({
-        id: m.key,
-        icon: "icon-picture",
-        data: [
-          { columnAlias: "name", value: this.#renderName(m.key, m.name) },
-          { columnAlias: "path", value: html`<span class="path">${m.path ?? ""}</span>` },
-          { columnAlias: "size", value: formatBytes(m.sizeBytes) },
-        ],
-      }));
-    }
-
-    return result.files.map((f) => ({
-      id: f.path,
-      icon: "icon-document",
+  get #pageItems(): UmbTableItem[] {
+    return (this._slice?.pageItems ?? []).map((item) => ({
+      id: item.id,
+      icon: this.#isMedia ? "icon-picture" : "icon-document",
       data: [
-        { columnAlias: "path", value: html`<span class="path">${f.path}</span>` },
-        { columnAlias: "size", value: formatBytes(f.sizeBytes) },
+        // Media names link to the workspace overlay; physical files have nowhere to open.
+        { columnAlias: "name", value: this.#isMedia ? this.#renderName(item.id, item.name) : item.name },
+        { columnAlias: "path", value: html`<span class="path">${item.path ?? ""}</span>` },
+        { columnAlias: "size", value: formatBytes(item.sizeBytes) },
       ],
     }));
   }
 
+  #mediaHref = (unique: string): string | undefined =>
+    this._mediaEditBuilder
+      ? this._mediaEditBuilder({ unique }) +
+        UMB_EDIT_MEDIA_WORKSPACE_PATH_PATTERN.generateLocal({ unique })
+      : undefined;
+
   #renderName(key: string, name: string) {
-    if (!this._mediaEditBuilder) {
+    const href = this.#mediaHref(key);
+    if (!href) {
       return name;
     }
-    const href =
-      this._mediaEditBuilder({ unique: key }) +
-      UMB_EDIT_MEDIA_WORKSPACE_PATH_PATTERN.generateLocal({ unique: key });
     return html`<uui-button look="link" compact label=${name} href=${href}>${name}</uui-button>`;
   }
 
   #onSelection(event: Event) {
-    const table = event.target as UmbTableElement;
-    this.#context?.setSelection(this._activeTab, table.selection ?? []);
+    const view = event.target as UmbTableElement | MediaManagerMediaGridElement;
+    const tableSelection = view.selection ?? [];
+
+    // Any manual (de)selection drops the "all selected" mode back to explicit ids.
+    if (this._slice?.allSelected) {
+      this.#context?.setSelection(this._activeTab, tableSelection);
+      return;
+    }
+
+    // The table only knows the current page (its select-all replaces the selection with the
+    // visible items), so off-page selections are merged back in here.
+    const pageIds = new Set(this.#pageItems.map((item) => item.id));
+    const offPage = (this._slice?.selected ?? []).filter((id) => !pageIds.has(id));
+    this.#context?.setSelection(this._activeTab, [...offPage, ...tableSelection]);
+  }
+
+  #onPageChange(event: Event) {
+    this.#context?.loadPage(this._activeTab, (event.target as UUIPaginationElement).current);
   }
 
   async #deleteSelected() {
-    const count = this._slice?.selected.length ?? 0;
+    const slice = this._slice;
+    const count = slice?.allSelected ? this.#total : slice?.selected.length ?? 0;
     if (count === 0) {
       return;
     }
@@ -151,7 +166,7 @@ export class MediaManagerResultsElement extends UmbLitElement {
     if (slice.state === "failed") {
       return this.#renderFailed();
     }
-    return this.#items.length === 0 ? this.#renderEmpty() : this.#renderTable(slice);
+    return this.#total === 0 ? this.#renderEmpty() : this.#renderResults(slice);
   }
 
   #renderScanning(processed: number) {
@@ -194,33 +209,89 @@ export class MediaManagerResultsElement extends UmbLitElement {
     `;
   }
 
-  #renderTable(slice: ScanSlice) {
-    const selectedCount = slice.selected.length;
-    const itemCount = this.#items.length;
+  #renderSummary(slice: ScanSlice) {
+    if (slice.allSelected) {
+      return `All ${this.#total} selected`;
+    }
+    return slice.selected.length > 0 ? `${slice.selected.length} selected` : `${this.#total} item(s)`;
+  }
+
+  #renderResults(slice: ScanSlice) {
+    const total = this.#total;
+    const selectedCount = slice.allSelected ? total : slice.selected.length;
+    const pageIds = new Set(this.#pageItems.map((item) => item.id));
+    const viewSelection = slice.allSelected
+      ? [...pageIds]
+      : slice.selected.filter((id) => pageIds.has(id));
     return html`
       <uui-box class="results">
         <div class="toolbar">
-          <span class="summary">
-            ${selectedCount > 0 ? `${selectedCount} selected` : `${itemCount} item(s)`}
-          </span>
-          <uui-button
-            look="primary"
-            color="danger"
-            label=${this.#isMedia ? "Move to Recycle Bin" : "Delete files"}
-            ?disabled=${selectedCount === 0}
-            @click=${this.#deleteSelected}
-          >
-            ${this.#isMedia ? "Move to Recycle Bin" : "Delete files"}
-          </uui-button>
+          <span class="summary">${this.#renderSummary(slice)}</span>
+          <div class="actions">
+            ${total > PAGE_SIZE && !slice.allSelected
+              ? html`
+                  <uui-button
+                    look="secondary"
+                    compact
+                    label="Select all ${total}"
+                    @click=${() => this.#context?.selectAll(this._activeTab)}
+                  >
+                    Select all ${total}
+                  </uui-button>
+                `
+              : nothing}
+            ${selectedCount > 0
+              ? html`
+                  <uui-button
+                    look="secondary"
+                    compact
+                    label="Clear selection"
+                    @click=${() => this.#context?.setSelection(this._activeTab, [])}
+                  >
+                    Clear selection
+                  </uui-button>
+                `
+              : nothing}
+            <uui-button
+              look="primary"
+              color="danger"
+              label=${this.#isMedia ? "Move to Recycle Bin" : "Delete files"}
+              ?disabled=${selectedCount === 0}
+              @click=${this.#deleteSelected}
+            >
+              ${this.#isMedia ? "Move to Recycle Bin" : "Delete files"}
+            </uui-button>
+          </div>
         </div>
-        <umb-table
-          .config=${this.#config}
-          .columns=${this.#columns}
-          .items=${this.#items}
-          .selection=${slice.selected}
-          @selected=${this.#onSelection}
-          @deselected=${this.#onSelection}
-        ></umb-table>
+        ${this.#isGridView
+          ? html`
+              <media-manager-media-grid
+                .items=${slice.pageItems}
+                .selection=${viewSelection}
+                .hrefFor=${this.#mediaHref}
+                @selected=${this.#onSelection}
+                @deselected=${this.#onSelection}
+              ></media-manager-media-grid>
+            `
+          : html`
+              <umb-table
+                .config=${this.#config}
+                .columns=${COLUMNS}
+                .items=${this.#pageItems}
+                .selection=${viewSelection}
+                @selected=${this.#onSelection}
+                @deselected=${this.#onSelection}
+              ></umb-table>
+            `}
+        ${this.#pageCount > 1
+          ? html`
+              <uui-pagination
+                .current=${slice.page}
+                .total=${this.#pageCount}
+                @change=${this.#onPageChange}
+              ></uui-pagination>
+            `
+          : nothing}
       </uui-box>
     `;
   }
@@ -239,6 +310,15 @@ export class MediaManagerResultsElement extends UmbLitElement {
       }
       .summary {
         color: var(--uui-color-text-alt);
+      }
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: var(--uui-size-space-3);
+      }
+      uui-pagination {
+        display: block;
+        margin-top: var(--uui-size-space-4);
       }
       .state {
         display: flex;

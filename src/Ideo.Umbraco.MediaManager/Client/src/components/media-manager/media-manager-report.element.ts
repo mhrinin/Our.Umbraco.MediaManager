@@ -48,13 +48,13 @@ export class MediaManagerReportElement extends UmbLitElement {
   }
 
   get #largestItems(): UmbTableItem[] {
-    return (this._slice?.result?.report?.largest ?? []).map((media) => ({
-      id: media.key,
+    return (this._slice?.result?.report?.largest ?? []).map((item) => ({
+      id: item.id,
       icon: "icon-picture",
       data: [
-        { columnAlias: "name", value: media.name },
-        { columnAlias: "path", value: html`<span class="path">${media.path ?? ""}</span>` },
-        { columnAlias: "size", value: formatBytes(media.sizeBytes) },
+        { columnAlias: "name", value: item.name },
+        { columnAlias: "path", value: html`<span class="path">${item.path ?? ""}</span>` },
+        { columnAlias: "size", value: formatBytes(item.sizeBytes) },
       ],
     }));
   }
