@@ -5,4 +5,5 @@ public sealed record ScanResult(
     ScanType Type,
     IReadOnlyList<MediaCandidate> Media,
     IReadOnlyList<FileCandidate> Files,
-    long ReclaimableBytes);
+    long ReclaimableBytes,
+    StorageReport? Report = null);

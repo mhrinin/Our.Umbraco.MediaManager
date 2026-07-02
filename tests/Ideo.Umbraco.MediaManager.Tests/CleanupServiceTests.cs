@@ -15,9 +15,11 @@ public class CleanupServiceTests
     {
         var editing = new Mock<IMediaEditingService>();
         var audit = new Mock<IAuditService>();
+#if NET10_0
         audit
             .Setup(a => a.AddAsync(It.IsAny<AuditType>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(Attempt.Succeed(AuditLogOperationStatus.Success));
+#endif
 
         var security = new Mock<IBackOfficeSecurityAccessor>();
         security.SetupGet(s => s.BackOfficeSecurity).Returns((IBackOfficeSecurity?)null);
@@ -26,6 +28,33 @@ public class CleanupServiceTests
         // path), so it is safe to pass null here.
         var service = new CleanupService(editing.Object, null!, audit.Object, security.Object, new Mock<IScanJobManager>().Object);
         return (service, editing, audit);
+    }
+
+    // Umbraco 17 audits via the async key-based API; Umbraco 16 via the sync int-user-id one.
+    private static void VerifyAuditedDeletes(Mock<IAuditService> audit, Times times)
+    {
+#if NET10_0
+        audit.Verify(
+            a => a.AddAsync(It.IsAny<AuditType>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            times);
+#else
+        audit.Verify(
+            a => a.Add(It.IsAny<AuditType>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            times);
+#endif
+    }
+
+    private static void VerifyAuditedDelete(Mock<IAuditService> audit, int entityId)
+    {
+#if NET10_0
+        audit.Verify(
+            a => a.AddAsync(AuditType.Delete, It.IsAny<Guid>(), entityId, "media", It.IsAny<string>(), It.IsAny<string>()),
+            Times.Once);
+#else
+        audit.Verify(
+            a => a.Add(AuditType.Delete, It.IsAny<int>(), entityId, "media", It.IsAny<string>(), It.IsAny<string>()),
+            Times.Once);
+#endif
     }
 
     private static IMedia MediaWith(int id)
@@ -46,7 +75,7 @@ public class CleanupServiceTests
         Assert.Equal(2, result.Affected);
         Assert.Empty(result.Errors);
         editing.Verify(e => e.MoveToRecycleBinAsync(It.IsAny<Guid>(), It.IsAny<Guid>()), Times.Never);
-        audit.Verify(a => a.AddAsync(It.IsAny<AuditType>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        VerifyAuditedDeletes(audit, Times.Never());
     }
 
     [Fact]
@@ -63,7 +92,7 @@ public class CleanupServiceTests
         Assert.Equal(1, result.Affected);
         Assert.Empty(result.Errors);
         editing.Verify(e => e.MoveToRecycleBinAsync(key, It.IsAny<Guid>()), Times.Once);
-        audit.Verify(a => a.AddAsync(AuditType.Delete, It.IsAny<Guid>(), 7, "media", It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+        VerifyAuditedDelete(audit, entityId: 7);
     }
 
     [Fact]
@@ -79,7 +108,7 @@ public class CleanupServiceTests
 
         Assert.Equal(0, result.Affected);
         Assert.Single(result.Errors);
-        audit.Verify(a => a.AddAsync(It.IsAny<AuditType>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        VerifyAuditedDeletes(audit, Times.Never());
     }
 
     [Fact]
@@ -93,6 +122,6 @@ public class CleanupServiceTests
 
         Assert.Equal(0, result.Affected);
         Assert.Single(result.Errors);
-        audit.Verify(a => a.AddAsync(It.IsAny<AuditType>(), It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        VerifyAuditedDeletes(audit, Times.Never());
     }
 }

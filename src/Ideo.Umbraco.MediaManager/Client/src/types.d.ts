@@ -1,8 +1,13 @@
-export type ScanType = "UnusedMedia" | "OrphanedFiles" | "BrokenMedia" | "Duplicates";
+export type ScanType =
+  | "UnusedMedia"
+  | "OrphanedFiles"
+  | "BrokenMedia"
+  | "Duplicates"
+  | "StorageReport";
 
-export type MediaManagerTab = ScanType | "StorageReport";
+export type MediaManagerTab = ScanType;
 
-export type ScanState =
+export type ScanJobState =
   | "Queued"
   | "Running"
   | "Completed"
@@ -16,9 +21,8 @@ export interface StartScanResponse {
 export interface ScanJobStatus {
   id: string;
   type: ScanType;
-  state: ScanState;
+  state: ScanJobState;
   processed: number;
-  total: number;
   foundCount: number;
   error: string | null;
 }
@@ -41,6 +45,7 @@ export interface ScanResult {
   media: MediaCandidate[];
   files: FileCandidate[];
   reclaimableBytes: number;
+  report: StorageReport | null;
 }
 
 export interface CleanupResult {

@@ -6,4 +6,5 @@ public enum ScanType
     OrphanedFiles,
     BrokenMedia,
     Duplicates,
+    StorageReport,
 }

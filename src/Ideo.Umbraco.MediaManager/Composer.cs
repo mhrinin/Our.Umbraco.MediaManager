@@ -15,12 +15,12 @@ public class Composer : IComposer
             .Bind(builder.Config.GetSection(MediaManagerOptions.SectionName));
 
         builder.Services.AddScoped<IMediaReferenceCollector, MediaReferenceCollector>();
-        builder.Services.AddScoped<IUnusedMediaScanner, UnusedMediaScanner>();
-        builder.Services.AddScoped<IOrphanedFileScanner, OrphanedFileScanner>();
-        builder.Services.AddScoped<IBrokenMediaScanner, BrokenMediaScanner>();
-        builder.Services.AddScoped<IDuplicateScanner, DuplicateScanner>();
+        builder.Services.AddScoped<IMediaScan, UnusedMediaScanner>();
+        builder.Services.AddScoped<IMediaScan, OrphanedFileScanner>();
+        builder.Services.AddScoped<IMediaScan, BrokenMediaScanner>();
+        builder.Services.AddScoped<IMediaScan, DuplicateScanner>();
+        builder.Services.AddScoped<IMediaScan, StorageReportService>();
         builder.Services.AddScoped<ICleanupService, CleanupService>();
-        builder.Services.AddScoped<IStorageReportService, StorageReportService>();
 
         builder.Services.AddSingleton<ScanJobManager>();
         builder.Services.AddSingleton<IScanJobManager>(provider => provider.GetRequiredService<ScanJobManager>());

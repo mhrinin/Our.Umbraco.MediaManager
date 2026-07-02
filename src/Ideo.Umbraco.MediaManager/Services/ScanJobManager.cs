@@ -9,78 +9,98 @@ using Microsoft.Extensions.Logging;
 namespace Ideo.Umbraco.MediaManager.Services;
 
 /// <summary>
-/// Runs scans as cancellable background jobs with progress. State is in-memory, so this is
-/// single-instance only (documented limitation). Scoped Umbraco services are resolved per job
-/// via <see cref="IServiceScopeFactory"/> — never captured on this singleton.
+/// Runs scans as cancellable background jobs with progress. Exactly one job per scan type is
+/// retained (the latest), so memory stays bounded no matter how often dashboards are opened, and
+/// starting a scan whose type is already queued/running joins that job instead of stacking a
+/// duplicate. State is in-memory, so this is single-instance only (documented limitation). Scoped
+/// Umbraco services are resolved per job via <see cref="IServiceScopeFactory"/> — never captured
+/// on this singleton.
 /// </summary>
 public sealed class ScanJobManager(
     IServiceScopeFactory scopeFactory,
     ILogger<ScanJobManager> logger) : BackgroundService, IScanJobManager
 {
-    private readonly Channel<Guid> queue = Channel.CreateUnbounded<Guid>();
-    private readonly ConcurrentDictionary<Guid, ScanJobStatus> statuses = new();
-    private readonly ConcurrentDictionary<Guid, ScanResult> results = new();
-    private readonly ConcurrentDictionary<Guid, CancellationTokenSource> cancellations = new();
+    private readonly Channel<ScanType> queue = Channel.CreateUnbounded<ScanType>();
+    private readonly ConcurrentDictionary<ScanType, ScanJob> jobs = new();
 
     public Guid StartScan(ScanType type)
     {
-        var jobId = Guid.NewGuid();
-        statuses[jobId] = new ScanJobStatus { Id = jobId, Type = type };
-        cancellations[jobId] = new CancellationTokenSource();
-        queue.Writer.TryWrite(jobId);
-        return jobId;
+        while (true)
+        {
+            if (jobs.TryGetValue(type, out var existing) && existing.Status.State is ScanState.Queued or ScanState.Running)
+            {
+                return existing.Status.Id;
+            }
+
+            var job = new ScanJob
+            {
+                Status = new ScanJobStatus { Id = Guid.NewGuid(), Type = type },
+                Cancellation = new CancellationTokenSource(),
+            };
+
+            var stored = existing is null ? jobs.TryAdd(type, job) : jobs.TryUpdate(type, job, existing);
+            if (stored)
+            {
+                queue.Writer.TryWrite(type);
+                return job.Status.Id;
+            }
+
+            job.Cancellation.Dispose();
+        }
     }
 
-    public ScanJobStatus? GetStatus(Guid jobId) => statuses.GetValueOrDefault(jobId);
+    public ScanJobStatus? GetStatus(Guid jobId) => Find(jobId)?.Status;
 
-    public ScanResult? GetResult(Guid jobId) => results.GetValueOrDefault(jobId);
+    public ScanResult? GetResult(Guid jobId) => Find(jobId)?.Result;
 
     public bool Cancel(Guid jobId)
     {
-        if (cancellations.TryGetValue(jobId, out var cts))
+        var job = Find(jobId);
+        if (job is null || job.Status.State is not (ScanState.Queued or ScanState.Running))
         {
-            cts.Cancel();
-            return true;
+            return false;
         }
 
-        return false;
+        try
+        {
+            job.Cancellation.Cancel();
+            return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            // The job reached a terminal state (and disposed its source) between the check and the cancel.
+            return false;
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var jobId in queue.Reader.ReadAllAsync(stoppingToken))
+        await foreach (var type in queue.Reader.ReadAllAsync(stoppingToken))
         {
-            await RunJobAsync(jobId, stoppingToken);
+            if (jobs.TryGetValue(type, out var job) && job.Status.State == ScanState.Queued)
+            {
+                await RunJobAsync(job, stoppingToken);
+            }
         }
     }
 
-    private async Task RunJobAsync(Guid jobId, CancellationToken stoppingToken)
+    private async Task RunJobAsync(ScanJob job, CancellationToken stoppingToken)
     {
-        if (!statuses.TryGetValue(jobId, out var status))
-        {
-            return;
-        }
-
-        cancellations.TryGetValue(jobId, out var jobCts);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, jobCts?.Token ?? CancellationToken.None);
-        var token = linked.Token;
-
-        status.State = ScanState.Running;
-        var progress = new Progress<int>(processed => status.Processed = processed);
+        var status = job.Status;
 
         try
         {
-            using var scope = scopeFactory.CreateScope();
-            var result = status.Type switch
-            {
-                ScanType.UnusedMedia => await RunMediaScanAsync(scope, jobId, progress, token),
-                ScanType.OrphanedFiles => await RunFileScanAsync(scope, jobId, progress, token),
-                ScanType.BrokenMedia => await RunBrokenMediaScanAsync(scope, jobId, progress, token),
-                ScanType.Duplicates => await RunDuplicateScanAsync(scope, jobId, progress, token),
-                _ => throw new NotSupportedException($"Unknown scan type {status.Type}."),
-            };
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, job.Cancellation.Token);
+            linked.Token.ThrowIfCancellationRequested();
+            status.State = ScanState.Running;
 
-            results[jobId] = result;
+            using var scope = scopeFactory.CreateScope();
+            var scan = scope.ServiceProvider.GetServices<IMediaScan>().FirstOrDefault(s => s.Type == status.Type)
+                ?? throw new NotSupportedException($"No scan registered for type {status.Type}.");
+
+            var result = await scan.RunAsync(status.Id, new StatusProgress(status), linked.Token);
+
+            job.Result = result;
             status.FoundCount = result.Media.Count + result.Files.Count;
             status.State = ScanState.Completed;
         }
@@ -92,36 +112,31 @@ public sealed class ScanJobManager(
         {
             status.State = ScanState.Failed;
             status.Error = ex.Message;
-            logger.LogError(ex, "Media Manager scan {JobId} failed.", jobId);
+            logger.LogError(ex, "Media Manager scan {JobId} failed.", status.Id);
+        }
+        finally
+        {
+            job.Cancellation.Dispose();
         }
     }
 
-    private static async Task<ScanResult> RunMediaScanAsync(IServiceScope scope, Guid jobId, IProgress<int> progress, CancellationToken token)
+    private ScanJob? Find(Guid jobId) => jobs.Values.FirstOrDefault(job => job.Status.Id == jobId);
+
+    /// <summary>
+    /// Writes progress straight onto the status from the job thread, keeping updates ordered
+    /// (<see cref="Progress{T}"/> would post to the thread pool and could regress between polls).
+    /// </summary>
+    private sealed class StatusProgress(ScanJobStatus status) : IProgress<int>
     {
-        var scanner = scope.ServiceProvider.GetRequiredService<IUnusedMediaScanner>();
-        var media = await scanner.ScanAsync(progress, token);
-        return new ScanResult(jobId, ScanType.UnusedMedia, media, [], media.Sum(candidate => candidate.SizeBytes));
+        public void Report(int value) => status.Processed = value;
     }
 
-    private static async Task<ScanResult> RunFileScanAsync(IServiceScope scope, Guid jobId, IProgress<int> progress, CancellationToken token)
+    private sealed class ScanJob
     {
-        var scanner = scope.ServiceProvider.GetRequiredService<IOrphanedFileScanner>();
-        var files = await scanner.ScanAsync(progress, token);
-        return new ScanResult(jobId, ScanType.OrphanedFiles, [], files, files.Sum(candidate => candidate.SizeBytes));
-    }
+        public required ScanJobStatus Status { get; init; }
 
-    private static async Task<ScanResult> RunBrokenMediaScanAsync(IServiceScope scope, Guid jobId, IProgress<int> progress, CancellationToken token)
-    {
-        var scanner = scope.ServiceProvider.GetRequiredService<IBrokenMediaScanner>();
-        var media = await scanner.ScanAsync(progress, token);
-        // Files are already missing, so nothing is reclaimed by cleaning up broken nodes.
-        return new ScanResult(jobId, ScanType.BrokenMedia, media, [], 0);
-    }
+        public required CancellationTokenSource Cancellation { get; init; }
 
-    private static async Task<ScanResult> RunDuplicateScanAsync(IServiceScope scope, Guid jobId, IProgress<int> progress, CancellationToken token)
-    {
-        var scanner = scope.ServiceProvider.GetRequiredService<IDuplicateScanner>();
-        var media = await scanner.ScanAsync(progress, token);
-        return new ScanResult(jobId, ScanType.Duplicates, media, [], media.Sum(candidate => candidate.SizeBytes));
+        public ScanResult? Result { get; set; }
     }
 }

@@ -13,17 +13,26 @@ namespace Ideo.Umbraco.MediaManager.Services;
 /// Builds a storage report primarily from sizes stored in Umbraco's database (<c>umbracoBytes</c>).
 /// Reading the DB keeps the report provider-agnostic and avoids per-file calls to remote storage
 /// (Azure Blob / S3); a filesystem stat is only used as a fallback for media that have no stored
-/// size (rare on healthy sites).
+/// size (rare on healthy sites). Runs as a background job like the scanners, so large libraries
+/// never block an HTTP request thread.
 /// </summary>
 public sealed class StorageReportService(
     IMediaService mediaService,
     MediaFileManager mediaFileManager,
-    MediaUrlGeneratorCollection mediaUrlGenerators) : IStorageReportService
+    MediaUrlGeneratorCollection mediaUrlGenerators) : IMediaScan
 {
     private const int PageSize = 200;
     private const int TopCount = 20;
 
-    public Task<StorageReport> GenerateAsync(IProgress<int>? progress, CancellationToken cancellationToken)
+    public ScanType Type => ScanType.StorageReport;
+
+    public async Task<ScanResult> RunAsync(Guid jobId, IProgress<int>? progress, CancellationToken cancellationToken)
+    {
+        var report = await GenerateAsync(progress, cancellationToken);
+        return new ScanResult(jobId, Type, [], [], 0, report);
+    }
+
+    private Task<StorageReport> GenerateAsync(IProgress<int>? progress, CancellationToken cancellationToken)
     {
         var fileSystem = mediaFileManager.FileSystem;
         var byType = new Dictionary<string, TypeAggregate>();
@@ -46,7 +55,7 @@ public sealed class StorageReportService(
 
                 if (media.Trashed)
                 {
-                    // Recycle-bin items are reported separately from the active library.
+                    // The report covers the active library only; recycle-bin items are excluded.
                     continue;
                 }
 

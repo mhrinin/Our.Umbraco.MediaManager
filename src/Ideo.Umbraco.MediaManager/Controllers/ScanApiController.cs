@@ -10,7 +10,10 @@ namespace Ideo.Umbraco.MediaManager.Controllers;
 public class ScanApiController(IScanJobManager jobManager) : MediaManagerApiControllerBase
 {
     [HttpPost("scan")]
-    public IActionResult StartScan([FromQuery] ScanType type) => Ok(new { jobId = jobManager.StartScan(type) });
+    public IActionResult StartScan([FromQuery] ScanType type)
+        => Enum.IsDefined(type)
+            ? Ok(new StartScanResponse(jobManager.StartScan(type)))
+            : BadRequest($"Unknown scan type '{type}'.");
 
     [HttpGet("scan/{jobId:guid}/status")]
     public IActionResult GetStatus(Guid jobId)

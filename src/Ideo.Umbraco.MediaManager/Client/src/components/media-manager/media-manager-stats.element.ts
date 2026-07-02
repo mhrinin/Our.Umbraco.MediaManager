@@ -1,7 +1,7 @@
 import { css, html, state, customElement } from "@umbraco-cms/backoffice/external/lit";
 import { UmbLitElement } from "@umbraco-cms/backoffice/lit-element";
 import { MEDIA_MANAGER_CONTEXT } from "../../context/media-manager.context-token.js";
-import type { Slices } from "../../context/media-manager.context.js";
+import type { ScanSlice, Slices } from "../../context/media-manager.context.js";
 import { formatBytes } from "../../utils/format.js";
 import "./media-manager-stat-card.element.js";
 
@@ -12,6 +12,8 @@ interface Stat {
   description: string;
   loading: boolean;
 }
+
+const FAILED_VALUE = "—";
 
 @customElement("media-manager-stats")
 export class MediaManagerStatsElement extends UmbLitElement {
@@ -26,54 +28,71 @@ export class MediaManagerStatsElement extends UmbLitElement {
     });
   }
 
+  // An item can be both unused AND a duplicate copy; count its size once.
+  get #reclaimableBytes(): number {
+    const media = this._slices?.UnusedMedia.result;
+    const files = this._slices?.OrphanedFiles.result;
+    const duplicates = this._slices?.Duplicates.result;
+
+    const unusedKeys = new Set((media?.media ?? []).map((candidate) => candidate.key));
+    const duplicateOverlap = (duplicates?.media ?? [])
+      .filter((candidate) => unusedKeys.has(candidate.key))
+      .reduce((sum, candidate) => sum + candidate.sizeBytes, 0);
+
+    return (
+      (media?.reclaimableBytes ?? 0) +
+      (files?.reclaimableBytes ?? 0) +
+      (duplicates?.reclaimableBytes ?? 0) -
+      duplicateOverlap
+    );
+  }
+
+  #countStat(slice: ScanSlice | undefined, count: number): string {
+    return slice?.state === "failed" ? FAILED_VALUE : `${count}`;
+  }
+
   get #stats(): Stat[] {
     const media = this._slices?.UnusedMedia;
     const files = this._slices?.OrphanedFiles;
     const broken = this._slices?.BrokenMedia;
     const duplicates = this._slices?.Duplicates;
-    const scanning =
-      media?.state === "scanning" ||
-      files?.state === "scanning" ||
-      broken?.state === "scanning" ||
-      duplicates?.state === "scanning";
+    const cleanupSlices = [media, files, broken, duplicates];
+    const scanning = cleanupSlices.some((slice) => slice?.state === "scanning");
+    const anyFailed = cleanupSlices.some((slice) => slice?.state === "failed");
 
     return [
       {
         icon: "icon-picture",
         label: "Unused media",
-        value: `${media?.result?.media.length ?? 0}`,
+        value: this.#countStat(media, media?.result?.media.length ?? 0),
         description: "Media not referenced by any content.",
         loading: media?.state === "scanning",
       },
       {
         icon: "icon-documents",
         label: "Duplicates",
-        value: `${duplicates?.result?.media.length ?? 0}`,
+        value: this.#countStat(duplicates, duplicates?.result?.media.length ?? 0),
         description: "Redundant copies of identical files.",
         loading: duplicates?.state === "scanning",
       },
       {
         icon: "icon-alert",
         label: "Broken media",
-        value: `${broken?.result?.media.length ?? 0}`,
+        value: this.#countStat(broken, broken?.result?.media.length ?? 0),
         description: "Media whose file is missing on disk.",
         loading: broken?.state === "scanning",
       },
       {
         icon: "icon-document",
         label: "Orphaned files",
-        value: `${files?.result?.files.length ?? 0}`,
+        value: this.#countStat(files, files?.result?.files.length ?? 0),
         description: "Files on disk with no matching media item.",
         loading: files?.state === "scanning",
       },
       {
         icon: "icon-trash",
         label: "Reclaimable space",
-        value: formatBytes(
-          (media?.result?.reclaimableBytes ?? 0) +
-            (files?.result?.reclaimableBytes ?? 0) +
-            (duplicates?.result?.reclaimableBytes ?? 0),
-        ),
+        value: anyFailed ? FAILED_VALUE : formatBytes(this.#reclaimableBytes),
         description: "Disk space recovered by cleaning these up.",
         loading: scanning,
       },

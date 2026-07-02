@@ -10,8 +10,6 @@ public sealed class ScanJobStatus
 
     public int Processed { get; set; }
 
-    public int Total { get; set; }
-
     public int FoundCount { get; set; }
 
     public string? Error { get; set; }

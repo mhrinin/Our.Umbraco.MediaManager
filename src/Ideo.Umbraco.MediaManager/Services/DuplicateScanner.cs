@@ -2,75 +2,51 @@ using System.Security.Cryptography;
 using Ideo.Umbraco.MediaManager.Interfaces;
 using Ideo.Umbraco.MediaManager.Models;
 using Umbraco.Cms.Core.IO;
-using Umbraco.Cms.Core.Models;
-using Umbraco.Cms.Core.Models.Entities;
 using Umbraco.Cms.Core.Services;
+using UmbracoConstants = Umbraco.Cms.Core.Constants;
 
 namespace Ideo.Umbraco.MediaManager.Services;
 
 /// <summary>
 /// Finds byte-identical media files. Files are grouped by size first — a cheap pre-filter, since only
 /// equal-sized files can be identical — and the SHA-256 hash is computed only within those groups, so
-/// most files are never read. Within each set of identical files the oldest node is kept and the rest
-/// are reported as redundant copies.
+/// most files are never read. Within each set of identical files a referenced node is kept in
+/// preference to an unreferenced one (falling back to the oldest), and the rest are reported as
+/// redundant copies.
 /// </summary>
-public sealed class DuplicateScanner(IEntityService entityService, MediaFileManager mediaFileManager) : IDuplicateScanner
+public sealed class DuplicateScanner(
+    IEntityService entityService,
+    IRelationService relationService,
+    MediaFileManager mediaFileManager) : IMediaScan
 {
-    private const int PageSize = 500;
+    public ScanType Type => ScanType.Duplicates;
 
-    public Task<IReadOnlyList<MediaCandidate>> ScanAsync(IProgress<int>? progress, CancellationToken cancellationToken)
+    public Task<ScanResult> RunAsync(Guid jobId, IProgress<int>? progress, CancellationToken cancellationToken)
     {
+        var referencedIds = GetReferencedMediaIds();
         var fileSystem = mediaFileManager.FileSystem;
         var files = new List<MediaFile>();
-        long pageIndex = 0;
-        long total;
-        var processed = 0;
 
-        do
+        foreach (var media in MediaEntityPager.Page(entityService, includeTrashed: false, progress, cancellationToken))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var page = entityService.GetPagedDescendants(
-                UmbracoObjectTypes.Media,
-                pageIndex,
-                PageSize,
-                out total,
-                filter: null,
-                ordering: null,
-                includeTrashed: false);
-
-            foreach (var entity in page)
+            var relativePath = ToRelativePath(fileSystem, media.MediaPath!);
+            if (relativePath is null || !fileSystem.FileExists(relativePath))
             {
-                if (entity is not IMediaEntitySlim media || string.IsNullOrEmpty(media.MediaPath))
-                {
-                    continue;
-                }
-
-                processed++;
-
-                var relativePath = ToRelativePath(fileSystem, media.MediaPath);
-                if (relativePath is null || !fileSystem.FileExists(relativePath))
-                {
-                    continue;
-                }
-
-                files.Add(new MediaFile(media.Id, media.Key, media.Name ?? string.Empty, media.MediaPath, relativePath, fileSystem.GetSize(relativePath)));
+                continue;
             }
 
-            progress?.Report(processed);
-            pageIndex++;
+            files.Add(new MediaFile(media.Id, media.Key, media.Name ?? string.Empty, media.MediaPath!, relativePath, fileSystem.GetSize(relativePath)));
         }
-        while (pageIndex * PageSize < total);
 
         var duplicates = new List<MediaCandidate>();
 
         foreach (var sizeGroup in files.GroupBy(file => file.Size).Where(group => group.Count() > 1))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
             var byHash = new Dictionary<string, List<MediaFile>>();
             foreach (var file in sizeGroup)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 var hash = ComputeHash(fileSystem, file.RelativePath);
                 if (hash is null)
                 {
@@ -87,15 +63,35 @@ public sealed class DuplicateScanner(IEntityService entityService, MediaFileMana
 
             foreach (var identical in byHash.Values.Where(group => group.Count > 1))
             {
-                // Keep the oldest node (lowest id); report the remaining identical copies as redundant.
-                foreach (var redundant in identical.OrderBy(file => file.Id).Skip(1))
+                // Two nodes can point at the same physical file (programmatic imports): deleting
+                // the "redundant" node and emptying the bin would destroy the kept node's file too,
+                // so such groups are never flagged.
+                if (identical.Select(file => file.RelativePath).Distinct(StringComparer.OrdinalIgnoreCase).Count() < identical.Count)
+                {
+                    continue;
+                }
+
+                // Keep a referenced copy when there is one (deleting it would break content even
+                // though an identical file exists elsewhere), otherwise the oldest node.
+                foreach (var redundant in identical
+                    .OrderByDescending(file => referencedIds.Contains(file.Id))
+                    .ThenBy(file => file.Id)
+                    .Skip(1))
                 {
                     duplicates.Add(new MediaCandidate(redundant.Key, redundant.Name, redundant.MediaPath, redundant.Size));
                 }
             }
         }
 
-        return Task.FromResult<IReadOnlyList<MediaCandidate>>(duplicates);
+        return Task.FromResult(new ScanResult(jobId, Type, duplicates, [], duplicates.Sum(candidate => candidate.SizeBytes)));
+    }
+
+    private HashSet<int> GetReferencedMediaIds()
+    {
+        var relations = relationService.GetByRelationTypeAlias(UmbracoConstants.Conventions.RelationTypes.RelatedMediaAlias)
+            ?? [];
+
+        return relations.Select(relation => relation.ChildId).ToHashSet();
     }
 
     private static string? ToRelativePath(IFileSystem fileSystem, string mediaPath)

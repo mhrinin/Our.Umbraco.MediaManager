@@ -3,7 +3,9 @@ name: Release
 on:
   push:
     tags:
+      # This branch owns the Umbraco 16/17 line; v13.* tags are released from v13/main.
       - "v*"
+      - "!v13.*"
 
 jobs:
   publish:

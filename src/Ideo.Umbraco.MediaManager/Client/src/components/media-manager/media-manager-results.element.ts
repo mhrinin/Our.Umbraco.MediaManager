@@ -43,8 +43,8 @@ export class MediaManagerResultsElement extends UmbLitElement {
   constructor() {
     super();
 
-    // Register a modal route so an orphaned media item can be opened (and inspected) in a
-    // workspace overlay without leaving the dashboard.
+    // Register a modal route so a media item can be opened (and inspected) in a workspace
+    // overlay without leaving the dashboard.
     new UmbModalRouteRegistrationController(this, UMB_WORKSPACE_MODAL)
       .addUniquePaths(["unique"])
       .onSetup((params) => ({
@@ -59,20 +59,13 @@ export class MediaManagerResultsElement extends UmbLitElement {
       this.observe(context?.activeTab, (tab) => {
         if (tab && tab !== "StorageReport") {
           this._activeTab = tab;
+          this._slice = context?.getSlices()[tab];
         }
       });
       this.observe(context?.slices, (slices) => {
         this._slice = slices?.[this._activeTab];
       });
     });
-  }
-
-  override willUpdate(changed: Map<string, unknown>) {
-    super.willUpdate(changed);
-    // Re-derive the active slice when the tab changes.
-    if (changed.has("_activeTab") && this.#context) {
-      this._slice = this.#context.getSlices()[this._activeTab];
-    }
   }
 
   get #isMedia(): boolean {
@@ -155,7 +148,7 @@ export class MediaManagerResultsElement extends UmbLitElement {
       return this.#renderScanning(slice?.processed ?? 0);
     }
     if (slice.state === "failed") {
-      return html`<uui-box><p>The scan failed. Please try again.</p></uui-box>`;
+      return this.#renderFailed();
     }
     return this.#items.length === 0 ? this.#renderEmpty() : this.#renderTable(slice);
   }
@@ -171,11 +164,30 @@ export class MediaManagerResultsElement extends UmbLitElement {
     `;
   }
 
+  #renderFailed() {
+    return html`
+      <uui-box>
+        <div class="state">
+          <uui-icon name="icon-alert" class="failed-icon"></uui-icon>
+          <span>The scan failed.</span>
+          <uui-button
+            look="secondary"
+            label="Retry"
+            @click=${() => this.#context?.scan(this._activeTab)}
+          >
+            Retry
+          </uui-button>
+        </div>
+      </uui-box>
+    `;
+  }
+
   #renderEmpty() {
     return html`
       <uui-box>
         <div class="state">
-          <umb-empty-state size="small">Nothing to clean up here. 🎉</umb-empty-state>
+          <uui-icon name="icon-check" class="empty-icon"></uui-icon>
+          <span>Nothing to clean up here.</span>
         </div>
       </uui-box>
     `;
@@ -236,6 +248,14 @@ export class MediaManagerResultsElement extends UmbLitElement {
         padding: var(--uui-size-space-4);
         text-align: center;
         color: var(--uui-color-text-alt);
+      }
+      .empty-icon {
+        font-size: 2rem;
+        color: var(--uui-color-positive);
+      }
+      .failed-icon {
+        font-size: 2rem;
+        color: var(--uui-color-danger);
       }
       .path {
         color: var(--uui-color-text-alt);

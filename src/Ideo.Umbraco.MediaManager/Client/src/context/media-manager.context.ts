@@ -4,12 +4,7 @@ import type { UmbControllerHost } from "@umbraco-cms/backoffice/controller-api";
 import { UMB_NOTIFICATION_CONTEXT } from "@umbraco-cms/backoffice/notification";
 import type { UmbNotificationContext } from "@umbraco-cms/backoffice/notification";
 import { MediaManagerRepository } from "../services/media-manager.repository.js";
-import type {
-  MediaManagerTab,
-  ScanResult,
-  ScanType,
-  StorageReport,
-} from "../types.d.js";
+import type { MediaManagerTab, ScanResult, ScanType } from "../types.d.js";
 
 export type ScanState = "idle" | "scanning" | "done" | "failed";
 
@@ -22,34 +17,35 @@ export interface ScanSlice {
 
 export type Slices = Record<ScanType, ScanSlice>;
 
-export type ReportState = "idle" | "loading" | "done" | "failed";
-
-export interface ReportSlice {
-  state: ReportState;
-  result?: StorageReport;
-}
+const CLEANUP_SCAN_TYPES: ScanType[] = ["UnusedMedia", "OrphanedFiles", "BrokenMedia", "Duplicates"];
 
 const emptySlice = (): ScanSlice => ({ state: "idle", processed: 0, selected: [] });
 
 const POLL_INTERVAL_MS = 1000;
+// Job state is in-memory server-side; this many consecutive missing statuses means the job was
+// lost (app restart) and polling must stop instead of retrying forever.
+const MAX_MISSING_STATUS = 5;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class MediaManagerContext extends UmbControllerBase {
   #repository = new MediaManagerRepository(this);
   #notification?: UmbNotificationContext;
+  #aborters = new Map<ScanType, AbortController>();
 
   #slices = new UmbObjectState<Slices>({
     UnusedMedia: emptySlice(),
     OrphanedFiles: emptySlice(),
     BrokenMedia: emptySlice(),
     Duplicates: emptySlice(),
+    StorageReport: emptySlice(),
   });
   #activeTab = new UmbObjectState<MediaManagerTab>("UnusedMedia");
-  #report = new UmbObjectState<ReportSlice>({ state: "idle" });
 
   readonly slices = this.#slices.asObservable();
   readonly activeTab = this.#activeTab.asObservable();
-  readonly report = this.#report.asObservable();
+  readonly isScanning = this.#slices.asObservablePart((slices) =>
+    Object.values(slices).some((slice) => slice.state === "scanning"),
+  );
 
   constructor(host: UmbControllerHost) {
     super(host, "Ideo.Umbraco.MediaManager.Context");
@@ -58,28 +54,23 @@ export class MediaManagerContext extends UmbControllerBase {
     });
   }
 
+  override destroy(): void {
+    for (const aborter of this.#aborters.values()) {
+      aborter.abort();
+    }
+    this.#aborters.clear();
+    super.destroy();
+  }
+
   getSlices(): Slices {
     return this.#slices.getValue();
   }
 
   setActiveTab(tab: MediaManagerTab): void {
     this.#activeTab.setValue(tab);
-  }
-
-  async loadReport(force = false): Promise<void> {
-    const current = this.#report.getValue();
-    if (!force && (current.state === "loading" || current.state === "done")) {
-      return;
-    }
-
-    this.#report.setValue({ state: "loading" });
-    try {
-      const result = (await this.#repository.getStorageReport()) ?? undefined;
-      this.#report.setValue({ state: "done", result });
-    } catch (error) {
-      this.#report.setValue({ state: "failed" });
-      this.#notification?.peek("danger", { data: { message: "Failed to generate the storage report." } });
-      console.error(error);
+    // The storage report is loaded lazily, the first time its tab is opened.
+    if (tab === "StorageReport" && this.#slices.getValue().StorageReport.state === "idle") {
+      this.scan("StorageReport");
     }
   }
 
@@ -88,45 +79,75 @@ export class MediaManagerContext extends UmbControllerBase {
   }
 
   async scanAll(): Promise<void> {
-    await Promise.all([
-      this.scan("UnusedMedia"),
-      this.scan("OrphanedFiles"),
-      this.scan("BrokenMedia"),
-      this.scan("Duplicates"),
-    ]);
+    const types = [...CLEANUP_SCAN_TYPES];
+    // Refresh the storage report too once it has been loaded, so it never shows stale totals.
+    if (this.#slices.getValue().StorageReport.state !== "idle") {
+      types.push("StorageReport");
+    }
+    await Promise.all(types.map((type) => this.scan(type)));
   }
 
   async scan(type: ScanType): Promise<void> {
+    if (this.#slices.getValue()[type].state === "scanning") {
+      return;
+    }
+
+    this.#aborters.get(type)?.abort();
+    const aborter = new AbortController();
+    this.#aborters.set(type, aborter);
+    const signal = aborter.signal;
+
     this.#patch(type, { state: "scanning", processed: 0, result: undefined, selected: [] });
 
     try {
-      const jobId = await this.#repository.startScan(type);
+      const jobId = await this.#repository.startScan(type, signal);
+      let missingStatus = 0;
 
-      while (true) {
+      while (!signal.aborted) {
         await sleep(POLL_INTERVAL_MS);
-        const status = await this.#repository.getStatus(jobId);
+        if (signal.aborted) {
+          return;
+        }
+
+        const status = await this.#repository.getStatus(jobId, signal);
+        if (signal.aborted) {
+          return;
+        }
+
         if (!status) {
+          if (++missingStatus >= MAX_MISSING_STATUS) {
+            this.#fail(type, "The scan is no longer available on the server. Please rescan.");
+            return;
+          }
           continue;
         }
+
+        missingStatus = 0;
         this.#patch(type, { processed: status.processed });
 
         if (status.state === "Completed") {
-          const result = (await this.#repository.getResult(jobId)) ?? undefined;
+          const result = (await this.#repository.getResult(jobId, signal)) ?? undefined;
+          if (signal.aborted) {
+            return;
+          }
+          if (!result) {
+            this.#fail(type, "The scan result could not be retrieved. Please rescan.");
+            return;
+          }
           this.#patch(type, { state: "done", result });
-          break;
+          return;
         }
+
         if (status.state === "Failed" || status.state === "Cancelled") {
-          this.#patch(type, { state: "failed" });
-          this.#notification?.peek("danger", {
-            data: { message: `Scan ${status.state}${status.error ? `: ${status.error}` : ""}` },
-          });
-          break;
+          this.#fail(type, `Scan ${status.state.toLowerCase()}${status.error ? `: ${status.error}` : ""}.`);
+          return;
         }
       }
     } catch (error) {
-      this.#patch(type, { state: "failed" });
-      this.#notification?.peek("danger", { data: { message: "Scan failed to start." } });
-      console.error(error);
+      if (!signal.aborted) {
+        this.#fail(type, "The scan could not be started.");
+        console.error(error);
+      }
     }
   }
 
@@ -153,7 +174,7 @@ export class MediaManagerContext extends UmbControllerBase {
         },
       });
 
-      // A deleted item can appear in more than one scan (e.g. orphaned AND broken), so refresh
+      // A deleted item can appear in more than one scan (e.g. unused AND duplicate), so refresh
       // every scan to keep all tabs and stat cards consistent.
       await this.scanAll();
     } catch (error) {
@@ -162,10 +183,13 @@ export class MediaManagerContext extends UmbControllerBase {
     }
   }
 
+  #fail(type: ScanType, message: string): void {
+    this.#patch(type, { state: "failed", result: undefined });
+    this.#notification?.peek("danger", { data: { message } });
+  }
+
   #patch(type: ScanType, patch: Partial<ScanSlice>): void {
     const current = this.#slices.getValue();
     this.#slices.setValue({ ...current, [type]: { ...current[type], ...patch } });
   }
 }
-
-export { MediaManagerContext as api };

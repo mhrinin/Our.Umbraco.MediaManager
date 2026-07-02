@@ -2,31 +2,28 @@ using Ideo.Umbraco.MediaManager.Interfaces;
 using Ideo.Umbraco.MediaManager.Models;
 using Microsoft.Extensions.Options;
 using Umbraco.Cms.Core.IO;
-using Umbraco.Cms.Core.Models;
-using Umbraco.Cms.Core.Models.Entities;
 using Umbraco.Cms.Core.Services;
 using UmbracoConstants = Umbraco.Cms.Core.Constants;
 
 namespace Ideo.Umbraco.MediaManager.Services;
 
 /// <summary>
-/// Finds media nodes that nothing references. For performance it pages lightweight
-/// <see cref="IMediaEntitySlim"/> rows via <see cref="IEntityService"/> (no property hydration),
-/// excludes the recycle bin at the query level, and only reads file sizes for the unused set.
-/// A media node counts as used if either <see cref="IRelationService"/> (fast, published only) or the
-/// deep content scan (<see cref="IMediaReferenceCollector"/>, published + draft) reports a reference —
-/// the union avoids false positives on draft-heavy or freshly imported sites.
+/// Finds media nodes that nothing references. A media node counts as used if either
+/// <see cref="IRelationService"/> (fast, published only) or the deep content scan
+/// (<see cref="IMediaReferenceCollector"/>, published + draft) reports a reference — the union
+/// avoids false positives on draft-heavy or freshly imported sites. File sizes are read only for
+/// the unused set.
 /// </summary>
 public sealed class UnusedMediaScanner(
     IEntityService entityService,
     IRelationService relationService,
     IMediaReferenceCollector referenceCollector,
     MediaFileManager mediaFileManager,
-    IOptions<MediaManagerOptions> options) : IUnusedMediaScanner
+    IOptions<MediaManagerOptions> options) : IMediaScan
 {
-    private const int PageSize = 500;
+    public ScanType Type => ScanType.UnusedMedia;
 
-    public Task<IReadOnlyList<MediaCandidate>> ScanAsync(IProgress<int>? progress, CancellationToken cancellationToken)
+    public Task<ScanResult> RunAsync(Guid jobId, IProgress<int>? progress, CancellationToken cancellationToken)
     {
         var referencedIds = GetReferencedMediaIds();
         HashSet<Guid> referencedKeys = options.Value.DeepReferenceScan
@@ -35,57 +32,27 @@ public sealed class UnusedMediaScanner(
         var fileSystem = mediaFileManager.FileSystem;
 
         var candidates = new List<MediaCandidate>();
-        long pageIndex = 0;
-        long total;
-        var processed = 0;
-
-        do
+        foreach (var media in MediaEntityPager.Page(entityService, includeTrashed: false, progress, cancellationToken))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var page = entityService.GetPagedDescendants(
-                UmbracoObjectTypes.Media,
-                pageIndex,
-                PageSize,
-                out total,
-                filter: null,
-                ordering: null,
-                includeTrashed: false);
-
-            foreach (var entity in page)
+            if (!MediaScanLogic.IsUnusedMedia(media.Id, media.MediaPath, media.Trashed, referencedIds))
             {
-                // Only file-backed media are candidates; skip folders and non-media rows.
-                if (entity is not IMediaEntitySlim media || string.IsNullOrEmpty(media.MediaPath))
-                {
-                    continue;
-                }
-
-                processed++;
-
-                if (!MediaScanLogic.IsUnusedMedia(media.Id, media.MediaPath, media.Trashed, referencedIds))
-                {
-                    continue;
-                }
-
-                // Deep-scan safety net: skip media referenced from any content value (published or draft).
-                if (referencedKeys.Contains(media.Key))
-                {
-                    continue;
-                }
-
-                candidates.Add(new MediaCandidate(
-                    media.Key,
-                    media.Name ?? string.Empty,
-                    media.MediaPath,
-                    GetSize(fileSystem, media.MediaPath)));
+                continue;
             }
 
-            progress?.Report(processed);
-            pageIndex++;
-        }
-        while (pageIndex * PageSize < total);
+            // Deep-scan safety net: skip media referenced from any content value (published or draft).
+            if (referencedKeys.Contains(media.Key))
+            {
+                continue;
+            }
 
-        return Task.FromResult<IReadOnlyList<MediaCandidate>>(candidates);
+            candidates.Add(new MediaCandidate(
+                media.Key,
+                media.Name ?? string.Empty,
+                media.MediaPath,
+                GetSize(fileSystem, media.MediaPath!)));
+        }
+
+        return Task.FromResult(new ScanResult(jobId, Type, candidates, [], candidates.Sum(candidate => candidate.SizeBytes)));
     }
 
     private HashSet<int> GetReferencedMediaIds()

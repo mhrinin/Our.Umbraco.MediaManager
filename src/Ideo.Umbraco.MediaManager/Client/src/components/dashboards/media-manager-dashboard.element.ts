@@ -20,6 +20,7 @@ export class MediaManagerDashboardElement extends UmbLitElement {
 
   @state() private _slices?: Slices;
   @state() private _activeTab: MediaManagerTab = "UnusedMedia";
+  @state() private _isScanning = false;
 
   constructor() {
     super();
@@ -30,17 +31,13 @@ export class MediaManagerDashboardElement extends UmbLitElement {
     this.observe(this.#context.activeTab, (tab) => {
       this._activeTab = tab;
     });
+    this.observe(this.#context.isScanning, (isScanning) => {
+      this._isScanning = isScanning;
+    });
   }
 
   override firstUpdated() {
     this.#context.scanAll();
-  }
-
-  get #scanning(): boolean {
-    return (
-      this._slices?.UnusedMedia.state === "scanning" ||
-      this._slices?.OrphanedFiles.state === "scanning"
-    );
   }
 
   #count(type: MediaManagerTab): number | undefined {
@@ -85,7 +82,7 @@ export class MediaManagerDashboardElement extends UmbLitElement {
           <uui-button
             look="outline"
             label="Rescan"
-            ?disabled=${this.#scanning}
+            ?disabled=${this._isScanning}
             @click=${() => this.#context.scanAll()}
           >
             <uui-icon name="icon-sync"></uui-icon>

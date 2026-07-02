@@ -3,7 +3,7 @@ import { UmbLitElement } from "@umbraco-cms/backoffice/lit-element";
 import "@umbraco-cms/backoffice/components";
 import type { UmbTableColumn, UmbTableConfig, UmbTableItem } from "@umbraco-cms/backoffice/components";
 import { MEDIA_MANAGER_CONTEXT } from "../../context/media-manager.context-token.js";
-import type { MediaManagerContext, ReportSlice } from "../../context/media-manager.context.js";
+import type { MediaManagerContext, ScanSlice } from "../../context/media-manager.context.js";
 import { formatBytes } from "../../utils/format.js";
 
 const TABLE_CONFIG: UmbTableConfig = { allowSelection: false, hideIcon: false };
@@ -23,25 +23,20 @@ const LARGEST_COLUMNS: UmbTableColumn[] = [
 @customElement("media-manager-report")
 export class MediaManagerReportElement extends UmbLitElement {
   #context?: MediaManagerContext;
-  @state() private _report?: ReportSlice;
+  @state() private _slice?: ScanSlice;
 
   constructor() {
     super();
     this.consumeContext(MEDIA_MANAGER_CONTEXT, (context) => {
       this.#context = context;
-      this.observe(context?.report, (report) => {
-        this._report = report;
+      this.observe(context?.slices, (slices) => {
+        this._slice = slices?.StorageReport;
       });
     });
   }
 
-  override connectedCallback() {
-    super.connectedCallback();
-    this.#context?.loadReport();
-  }
-
   get #typeItems(): UmbTableItem[] {
-    return (this._report?.result?.byType ?? []).map((type) => ({
+    return (this._slice?.result?.report?.byType ?? []).map((type) => ({
       id: type.typeAlias,
       icon: type.icon,
       data: [
@@ -53,7 +48,7 @@ export class MediaManagerReportElement extends UmbLitElement {
   }
 
   get #largestItems(): UmbTableItem[] {
-    return (this._report?.result?.largest ?? []).map((media) => ({
+    return (this._slice?.result?.report?.largest ?? []).map((media) => ({
       id: media.key,
       icon: "icon-picture",
       data: [
@@ -65,34 +60,44 @@ export class MediaManagerReportElement extends UmbLitElement {
   }
 
   override render() {
-    const report = this._report;
-    if (!report || report.state === "idle" || report.state === "loading") {
+    const slice = this._slice;
+    if (!slice || slice.state === "idle" || slice.state === "scanning") {
       return html`
         <uui-box>
           <div class="state">
             <uui-loader-circle></uui-loader-circle>
-            <span>Generating storage report…</span>
+            <span>Generating storage report… (${slice?.processed ?? 0} processed)</span>
           </div>
         </uui-box>
       `;
     }
-    if (report.state === "failed") {
-      return html`<uui-box><div class="state">The report could not be generated. Please try again.</div></uui-box>`;
+
+    const report = slice.result?.report;
+    if (slice.state === "failed" || !report) {
+      return html`
+        <uui-box>
+          <div class="state">
+            <span>The report could not be generated.</span>
+            <uui-button look="secondary" label="Retry" @click=${() => this.#context?.scan("StorageReport")}>
+              Retry
+            </uui-button>
+          </div>
+        </uui-box>
+      `;
     }
 
-    const result = report.result;
     return html`
       <div class="report">
         <uui-box>
           <div class="totals">
             <div>
-              <div class="total-value">${formatBytes(result?.totalBytes ?? 0)}</div>
-              <div class="total-label">across ${result?.totalCount ?? 0} media files</div>
+              <div class="total-value">${formatBytes(report.totalBytes)}</div>
+              <div class="total-label">across ${report.totalCount} media files</div>
             </div>
             <uui-button
               look="secondary"
               label="Refresh"
-              @click=${() => this.#context?.loadReport(true)}
+              @click=${() => this.#context?.scan("StorageReport")}
             >
               <uui-icon name="icon-sync"></uui-icon>
               Refresh

@@ -7,47 +7,54 @@ import type {
   ScanResult,
   ScanType,
   StartScanResponse,
-  StorageReport,
 } from "../types.d.js";
 
 const BEARER = [{ scheme: "bearer", type: "http" }] as const;
 
+/**
+ * Thin HTTP layer over the Media Manager API. Never raises notifications itself — the context is
+ * the single place user-facing messages come from — and every call is abortable so polling stops
+ * the moment the dashboard is destroyed or a scan is restarted.
+ */
 export class MediaManagerRepository {
   private readonly apiBaseUrl = "/umbraco/media-manager/api/v1";
 
   constructor(private host: UmbControllerHost) {}
 
-  async startScan(type: ScanType): Promise<string> {
+  async startScan(type: ScanType, signal?: AbortSignal): Promise<string> {
     const { data, error } = await tryExecute(
       this.host,
       umbHttpClient.post<StartScanResponse>({
         url: `${this.apiBaseUrl}/scan?type=${type}`,
         security: [...BEARER],
       }),
+      { disableNotifications: true, abortSignal: signal },
     );
     if (error) throw error;
     if (!data) throw new Error("Failed to start scan");
     return data.jobId;
   }
 
-  async getStatus(jobId: string): Promise<ScanJobStatus | null> {
+  async getStatus(jobId: string, signal?: AbortSignal): Promise<ScanJobStatus | null> {
     const { data } = await tryExecute(
       this.host,
       umbHttpClient.get<ScanJobStatus>({
         url: `${this.apiBaseUrl}/scan/${jobId}/status`,
         security: [...BEARER],
       }),
+      { disableNotifications: true, abortSignal: signal },
     );
     return data ?? null;
   }
 
-  async getResult(jobId: string): Promise<ScanResult | null> {
+  async getResult(jobId: string, signal?: AbortSignal): Promise<ScanResult | null> {
     const { data } = await tryExecute(
       this.host,
       umbHttpClient.get<ScanResult>({
         url: `${this.apiBaseUrl}/scan/${jobId}/result`,
         security: [...BEARER],
       }),
+      { disableNotifications: true, abortSignal: signal },
     );
     return data ?? null;
   }
@@ -60,18 +67,7 @@ export class MediaManagerRepository {
         body: { keys, dryRun },
         security: [...BEARER],
       }),
-    );
-    if (error) throw error;
-    return data ?? null;
-  }
-
-  async getStorageReport(): Promise<StorageReport | null> {
-    const { data, error } = await tryExecute(
-      this.host,
-      umbHttpClient.get<StorageReport>({
-        url: `${this.apiBaseUrl}/report/storage`,
-        security: [...BEARER],
-      }),
+      { disableNotifications: true },
     );
     if (error) throw error;
     return data ?? null;
@@ -85,6 +81,7 @@ export class MediaManagerRepository {
         body: { jobId, paths, dryRun },
         security: [...BEARER],
       }),
+      { disableNotifications: true },
     );
     if (error) throw error;
     return data ?? null;

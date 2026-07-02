@@ -18,13 +18,4 @@ export const manifests: Array<UmbExtensionManifest> = [
       },
     ],
   },
-  {
-    type: "localization",
-    alias: "Ideo.Umbraco.MediaManager.Localize.En",
-    name: "English",
-    meta: {
-      culture: "en",
-    },
-    js: () => import("./localization/en.js"),
-  },
 ];
