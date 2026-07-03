@@ -3,7 +3,7 @@ namespace Ideo.Umbraco.MediaManager.Models;
 public sealed record ScanResult(
     Guid JobId,
     ScanType Type,
-    IReadOnlyList<MediaCandidate> Media,
-    IReadOnlyList<FileCandidate> Files,
+    IReadOnlyList<ScanItem> Items,
     long ReclaimableBytes,
-    StorageReport? Report = null);
+    StorageReport? Report = null,
+    ExportInfo? Export = null);

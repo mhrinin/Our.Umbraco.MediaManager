@@ -29,14 +29,14 @@ public sealed class StorageReportService(
     public async Task<ScanResult> RunAsync(Guid jobId, IProgress<int>? progress, CancellationToken cancellationToken)
     {
         var report = await GenerateAsync(progress, cancellationToken);
-        return new ScanResult(jobId, Type, [], [], 0, report);
+        return new ScanResult(jobId, Type, [], 0, report);
     }
 
     private Task<StorageReport> GenerateAsync(IProgress<int>? progress, CancellationToken cancellationToken)
     {
         var fileSystem = mediaFileManager.FileSystem;
         var byType = new Dictionary<string, TypeAggregate>();
-        var largest = new PriorityQueue<MediaCandidate, long>(); // min-heap: smallest size at the front
+        var largest = new PriorityQueue<ScanItem, long>(); // min-heap: smallest size at the front
         long totalBytes = 0;
         var totalCount = 0;
         long pageIndex = 0;
@@ -136,16 +136,16 @@ public sealed class StorageReportService(
         }
     }
 
-    private static void TrackLargest(PriorityQueue<MediaCandidate, long> largest, Guid key, string name, string? path, long bytes)
+    private static void TrackLargest(PriorityQueue<ScanItem, long> largest, Guid key, string name, string? path, long bytes)
     {
         if (largest.Count < TopCount)
         {
-            largest.Enqueue(new MediaCandidate(key, name, path, bytes), bytes);
+            largest.Enqueue(ScanItem.ForMedia(key, name, path, bytes), bytes);
         }
         else if (largest.TryPeek(out _, out var smallest) && bytes > smallest)
         {
             largest.Dequeue();
-            largest.Enqueue(new MediaCandidate(key, name, path, bytes), bytes);
+            largest.Enqueue(ScanItem.ForMedia(key, name, path, bytes), bytes);
         }
     }
 

@@ -1,9 +1,44 @@
+using Ideo.Umbraco.MediaManager.Models;
 using Ideo.Umbraco.MediaManager.Services;
 
 namespace Ideo.Umbraco.MediaManager.Tests;
 
 public class MediaScanLogicTests
 {
+    private static ScanResult Result(ScanType type, long reclaimableBytes, params ScanItem[] items)
+        => new(Guid.NewGuid(), type, items, reclaimableBytes);
+
+    private static ScanItem Candidate(Guid key, long sizeBytes)
+        => ScanItem.ForMedia(key, "file", "/media/file", sizeBytes);
+
+    [Fact]
+    public void ComputeReclaimableBytes_AllNull_IsZero()
+    {
+        Assert.Equal(0, MediaScanLogic.ComputeReclaimableBytes(null, null, null));
+    }
+
+    [Fact]
+    public void ComputeReclaimableBytes_NoOverlap_SumsAllScans()
+    {
+        var unused = Result(ScanType.UnusedMedia, 100, Candidate(Guid.NewGuid(), 100));
+        var orphaned = Result(ScanType.OrphanedFiles, 40);
+        var duplicates = Result(ScanType.Duplicates, 25, Candidate(Guid.NewGuid(), 25));
+
+        Assert.Equal(165, MediaScanLogic.ComputeReclaimableBytes(unused, orphaned, duplicates));
+    }
+
+    [Fact]
+    public void ComputeReclaimableBytes_UnusedDuplicate_CountedOnce()
+    {
+        // The same media item is both unused and a duplicate copy: its 30 bytes appear in both
+        // scans' totals and must be subtracted once.
+        var sharedKey = Guid.NewGuid();
+        var unused = Result(ScanType.UnusedMedia, 130, Candidate(sharedKey, 30), Candidate(Guid.NewGuid(), 100));
+        var duplicates = Result(ScanType.Duplicates, 55, Candidate(sharedKey, 30), Candidate(Guid.NewGuid(), 25));
+
+        Assert.Equal(155, MediaScanLogic.ComputeReclaimableBytes(unused, null, duplicates));
+    }
+
     [Fact]
     public void IsUnusedMedia_FileNotReferenced_IsOrphan()
     {
@@ -60,6 +95,16 @@ public class MediaScanLogicTests
     public void ExtractMediaKeys_NoReference_ReturnsEmpty(string? value)
     {
         Assert.Empty(MediaScanLogic.ExtractMediaKeys(value));
+    }
+
+    [Theory]
+    [InlineData("1071/kitten.jpg", "1071/kitten.jpg")]
+    [InlineData("/1071/kitten.jpg", "1071/kitten.jpg")]
+    [InlineData("deep\\nested\\file.bin", "deep/nested/file.bin")]
+    [InlineData("\\lead\\file.png", "lead/file.png")]
+    public void ToZipEntryName_NormalizesToRelativeForwardSlashes(string input, string expected)
+    {
+        Assert.Equal(expected, MediaScanLogic.ToZipEntryName(input));
     }
 
     [Theory]

@@ -20,10 +20,15 @@ public class Composer : IComposer
         builder.Services.AddScoped<IMediaScan, BrokenMediaScanner>();
         builder.Services.AddScoped<IMediaScan, DuplicateScanner>();
         builder.Services.AddScoped<IMediaScan, StorageReportService>();
+        builder.Services.AddScoped<IMediaScan, MediaExportService>();
         builder.Services.AddScoped<ICleanupService, CleanupService>();
 
         builder.Services.AddSingleton<ScanJobManager>();
         builder.Services.AddSingleton<IScanJobManager>(provider => provider.GetRequiredService<ScanJobManager>());
         builder.Services.AddHostedService(provider => provider.GetRequiredService<ScanJobManager>());
+
+        builder.Services.AddSingleton<ExportStore>();
+        builder.Services.AddSingleton<IExportStore>(provider => provider.GetRequiredService<ExportStore>());
+        builder.Services.AddHostedService(provider => provider.GetRequiredService<ExportStore>());
     }
 }

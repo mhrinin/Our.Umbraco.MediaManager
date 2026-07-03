@@ -38,7 +38,7 @@ public sealed class DuplicateScanner(
             files.Add(new MediaFile(media.Id, media.Key, media.Name ?? string.Empty, media.MediaPath!, relativePath, fileSystem.GetSize(relativePath)));
         }
 
-        var duplicates = new List<MediaCandidate>();
+        var duplicates = new List<ScanItem>();
 
         foreach (var sizeGroup in files.GroupBy(file => file.Size).Where(group => group.Count() > 1))
         {
@@ -78,12 +78,12 @@ public sealed class DuplicateScanner(
                     .ThenBy(file => file.Id)
                     .Skip(1))
                 {
-                    duplicates.Add(new MediaCandidate(redundant.Key, redundant.Name, redundant.MediaPath, redundant.Size));
+                    duplicates.Add(ScanItem.ForMedia(redundant.Key, redundant.Name, redundant.MediaPath, redundant.Size));
                 }
             }
         }
 
-        return Task.FromResult(new ScanResult(jobId, Type, duplicates, [], duplicates.Sum(candidate => candidate.SizeBytes)));
+        return Task.FromResult(new ScanResult(jobId, Type, duplicates, duplicates.Sum(candidate => candidate.SizeBytes)));
     }
 
     private HashSet<int> GetReferencedMediaIds()

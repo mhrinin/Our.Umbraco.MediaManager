@@ -21,7 +21,7 @@
             <div class="media-manager__card-desc">{{ t.desc }}</div>
         </div>
         <div class="media-manager__card">
-            <div class="media-manager__card-value">{{ vm.reclaimable() }}</div>
+            <div class="media-manager__card-value">{{ vm.formatBytes(vm.reclaimableBytes) }}</div>
             <div class="media-manager__card-label"><umb-icon icon="icon-trash"></umb-icon> Reclaimable space</div>
             <div class="media-manager__card-desc">Disk space recovered by cleaning these up.</div>
         </div>
@@ -39,10 +39,15 @@
                 ng-click="vm.setTab('StorageReport')">
             Storage report
         </button>
+        <button type="button" class="media-manager__tab"
+                ng-class="{ 'media-manager__tab--active': vm.activeTab === 'Export' }"
+                ng-click="vm.setTab('Export')">
+            Export
+        </button>
     </div>
 
-    <!-- Scan result tables -->
-    <umb-box ng-if="vm.activeTab !== 'StorageReport'">
+    <!-- Scan results -->
+    <umb-box ng-if="vm.activeTab !== 'StorageReport' && vm.activeTab !== 'Export'">
         <umb-box-content>
             <umb-load-indicator ng-if="vm.activeSlice().state === 'scanning'"></umb-load-indicator>
 
@@ -54,47 +59,81 @@
 
             <div ng-if="vm.activeSlice().state === 'done'">
                 <div class="media-manager__toolbar">
-                    <span>{{ vm.count(vm.activeTab) }} item(s)</span>
-                    <umb-button type="button"
-                                button-style="danger"
-                                label="Move to Recycle Bin"
-                                ng-if="vm.isMediaTab()"
-                                disabled="!vm.anySelected()"
-                                action="vm.deleteSelected()">
-                    </umb-button>
-                    <umb-button type="button"
-                                button-style="danger"
-                                label="Delete files"
-                                ng-if="!vm.isMediaTab()"
-                                disabled="!vm.anySelected()"
-                                action="vm.deleteSelected()">
-                    </umb-button>
+                    <span ng-if="vm.activeSlice().allSelected">All {{ vm.count(vm.activeTab) }} selected</span>
+                    <span ng-if="!vm.activeSlice().allSelected && vm.selectedCount() > 0">{{ vm.selectedCount() }} selected</span>
+                    <span ng-if="!vm.activeSlice().allSelected && vm.selectedCount() === 0">{{ vm.count(vm.activeTab) }} item(s)</span>
+                    <div class="media-manager__toolbar-actions">
+                        <umb-button type="button"
+                                    button-style="outline"
+                                    label="Select all {{ vm.count(vm.activeTab) }}"
+                                    ng-if="vm.count(vm.activeTab) > 0 && !vm.activeSlice().allSelected && vm.selectedCount() < vm.count(vm.activeTab)"
+                                    action="vm.selectAllTotal()">
+                        </umb-button>
+                        <umb-button type="button"
+                                    button-style="outline"
+                                    label="Clear selection"
+                                    ng-if="vm.selectedCount() > 0"
+                                    action="vm.clearSelection()">
+                        </umb-button>
+                        <umb-button type="button"
+                                    button-style="danger"
+                                    label="{{ vm.isMediaTab() ? 'Move to Recycle Bin' : 'Delete files' }}"
+                                    disabled="vm.selectedCount() === 0"
+                                    action="vm.deleteSelected()">
+                        </umb-button>
+                    </div>
                 </div>
 
                 <div class="media-manager__empty" ng-if="vm.count(vm.activeTab) === 0">
                     <umb-icon icon="icon-check"></umb-icon> Nothing to clean up here.
                 </div>
 
-                <table class="media-manager__table" ng-if="vm.count(vm.activeTab) > 0">
+                <!-- Preview-card grid: unused media and duplicates exist as viewable media -->
+                <div class="media-manager__grid" ng-if="vm.isGridTab() && vm.count(vm.activeTab) > 0">
+                    <div class="media-manager__media-card"
+                         ng-repeat="item in vm.activeSlice().pageItems track by item.id"
+                         ng-class="{ 'media-manager__media-card--selected': vm.isSelected(item) }">
+                        <button type="button" class="media-manager__media-preview" ng-click="vm.openMedia(item)" title="{{ item.name }}">
+                            <img ng-if="vm.thumbnailUrl(item)" ng-src="{{ vm.thumbnailUrl(item) }}" alt="{{ item.name }}" loading="lazy" />
+                            <umb-icon ng-if="!vm.thumbnailUrl(item)" icon="icon-document" class="media-manager__media-icon"></umb-icon>
+                        </button>
+                        <label class="media-manager__media-select">
+                            <input type="checkbox" ng-checked="vm.isSelected(item)" ng-click="vm.toggleItem(item)" />
+                        </label>
+                        <div class="media-manager__media-meta">
+                            <a href="" class="media-manager__media-name" ng-click="vm.openMedia(item)">{{ item.name }}</a>
+                            <small>{{ vm.formatBytes(item.sizeBytes) }}</small>
+                        </div>
+                    </div>
+                </div>
+
+                <table class="media-manager__table" ng-if="!vm.isGridTab() && vm.count(vm.activeTab) > 0">
                     <thead>
                         <tr>
-                            <th class="media-manager__check"><input type="checkbox" ng-checked="vm.allSelected()" ng-click="vm.toggleAll()" /></th>
-                            <th ng-if="vm.isMediaTab()">Name</th>
+                            <th class="media-manager__check"><input type="checkbox" ng-checked="vm.pageAllChecked()" ng-click="vm.togglePage()" /></th>
+                            <th>Name</th>
                             <th>Path</th>
                             <th class="media-manager__size">Size</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr ng-repeat="item in vm.activeSlice().items">
-                            <td class="media-manager__check"><input type="checkbox" ng-model="item.selected" /></td>
-                            <td ng-if="vm.isMediaTab()">
-                                <a href="" ng-click="vm.openMedia(item)">{{ item.name }}</a>
+                        <tr ng-repeat="item in vm.activeSlice().pageItems track by item.id">
+                            <td class="media-manager__check"><input type="checkbox" ng-checked="vm.isSelected(item)" ng-click="vm.toggleItem(item)" /></td>
+                            <td>
+                                <a href="" ng-if="vm.isMediaTab()" ng-click="vm.openMedia(item)">{{ item.name }}</a>
+                                <span ng-if="!vm.isMediaTab()">{{ item.name }}</span>
                             </td>
                             <td class="media-manager__path">{{ item.path }}</td>
                             <td class="media-manager__size">{{ vm.formatBytes(item.sizeBytes) }}</td>
                         </tr>
                     </tbody>
                 </table>
+
+                <umb-pagination ng-if="vm.pageCount() > 1"
+                                page-number="vm.activeSlice().page"
+                                total-pages="vm.pageCount()"
+                                on-change="vm.onPageChange(pageNumber)">
+                </umb-pagination>
             </div>
         </umb-box-content>
     </umb-box>
@@ -110,8 +149,8 @@
                     <umb-button type="button" button-style="outline" label="Retry" action="vm.retryActive()"></umb-button>
                 </div>
                 <div ng-if="vm.slices.StorageReport.state === 'done'">
-                    <div class="media-manager__total">{{ vm.formatBytes(vm.slices.StorageReport.report.totalBytes) }}</div>
-                    <div class="media-manager__card-desc">across {{ vm.slices.StorageReport.report.totalCount }} media files</div>
+                    <div class="media-manager__total">{{ vm.formatBytes(vm.slices.StorageReport.summary.report.totalBytes) }}</div>
+                    <div class="media-manager__card-desc">across {{ vm.slices.StorageReport.summary.report.totalCount }} media files</div>
                 </div>
             </umb-box-content>
         </umb-box>
@@ -122,7 +161,7 @@
                 <table class="media-manager__table">
                     <thead><tr><th>Media type</th><th>Items</th><th class="media-manager__size">Size</th></tr></thead>
                     <tbody>
-                        <tr ng-repeat="row in vm.slices.StorageReport.report.byType">
+                        <tr ng-repeat="row in vm.slices.StorageReport.summary.report.byType">
                             <td><umb-icon icon="{{row.icon}}"></umb-icon> {{ row.typeAlias }}</td>
                             <td>{{ row.count }}</td>
                             <td class="media-manager__size">{{ vm.formatBytes(row.bytes) }}</td>
@@ -138,7 +177,7 @@
                 <table class="media-manager__table">
                     <thead><tr><th>Name</th><th>Path</th><th class="media-manager__size">Size</th></tr></thead>
                     <tbody>
-                        <tr ng-repeat="item in vm.slices.StorageReport.report.largest">
+                        <tr ng-repeat="item in vm.slices.StorageReport.summary.report.largest">
                             <td>{{ item.name }}</td>
                             <td class="media-manager__path">{{ item.path }}</td>
                             <td class="media-manager__size">{{ vm.formatBytes(item.sizeBytes) }}</td>
@@ -148,5 +187,53 @@
             </umb-box-content>
         </umb-box>
     </div>
+
+    <!-- Export -->
+    <umb-box ng-if="vm.activeTab === 'Export'">
+        <umb-box-content>
+            <div class="media-manager__export" ng-if="vm.slices.Export.state === 'idle'">
+                <umb-icon icon="icon-download-alt" class="media-manager__export-icon"></umb-icon>
+                <p class="media-manager__export-explain">
+                    Builds a ZIP of the entire media filesystem, preserving folder structure, so it can be
+                    extracted into another environment's media folder or uploaded to blob storage.
+                    The regenerable image cache is excluded. Large libraries produce large archives —
+                    the export runs in the background and the download supports resuming.
+                </p>
+                <umb-button type="button" button-style="primary" label="Create export" action="vm.createExport()"></umb-button>
+            </div>
+
+            <div class="media-manager__export" ng-if="vm.slices.Export.state === 'scanning'">
+                <umb-load-indicator></umb-load-indicator>
+                <span>Creating export… ({{ vm.slices.Export.processed }} files added)</span>
+            </div>
+
+            <div class="media-manager__failed" ng-if="vm.slices.Export.state === 'failed'">
+                <umb-icon icon="icon-alert"></umb-icon>
+                <span>The export failed.</span>
+                <umb-button type="button" button-style="outline" label="Retry" action="vm.createExport()"></umb-button>
+            </div>
+
+            <div ng-if="vm.slices.Export.state === 'done' && vm.slices.Export.summary.export">
+                <div class="media-manager__total">{{ vm.formatBytes(vm.slices.Export.summary.export.zipSizeBytes) }}</div>
+                <div class="media-manager__card-desc">
+                    {{ vm.slices.Export.summary.export.fileCount }} file(s) · created {{ vm.slices.Export.summary.export.createdUtc | date:'medium' }}
+                </div>
+
+                <div class="media-manager__export-skipped" ng-if="vm.slices.Export.summary.export.skippedCount > 0">
+                    <strong>{{ vm.slices.Export.summary.export.skippedCount }} file(s) could not be read and were skipped:</strong>
+                    <ul>
+                        <li ng-repeat="error in vm.slices.Export.summary.export.errors track by $index">{{ error }}</li>
+                    </ul>
+                </div>
+
+                <div class="media-manager__export-actions">
+                    <umb-button type="button" button-style="primary" icon="icon-download-alt" label="Download ZIP" action="vm.downloadExport()"></umb-button>
+                    <umb-button type="button" button-style="outline" label="Re-export" action="vm.createExport()"></umb-button>
+                </div>
+
+                <p class="media-manager__export-hint">The export stays available until you create a new one or the site restarts.</p>
+            </div>
+        </umb-box-content>
+    </umb-box>
 
 </div>

@@ -7,4 +7,5 @@ public enum ScanType
     BrokenMedia,
     Duplicates,
     StorageReport,
+    Export,
 }

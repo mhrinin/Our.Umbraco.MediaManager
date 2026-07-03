@@ -34,11 +34,27 @@
             getResult: function (jobId) {
                 return handle($http.get(base + "GetResult?jobId=" + jobId), "Failed to get scan result");
             },
-            deleteMedia: function (keys, dryRun) {
-                return handle($http.post(base + "DeleteMedia", { keys: keys, dryRun: dryRun }), "Failed to delete media");
+            getResultItems: function (jobId, skip, take) {
+                return handle(
+                    $http.get(base + "GetResultItems?jobId=" + jobId + "&skip=" + skip + "&take=" + take),
+                    "Failed to get scan result items");
             },
-            deleteFiles: function (jobId, paths, dryRun) {
-                return handle($http.post(base + "DeleteFiles", { jobId: jobId, paths: paths, dryRun: dryRun }), "Failed to delete files");
+            getLatestResult: function (type) {
+                return handle($http.get(base + "GetLatestResult?type=" + encodeURIComponent(type)), "Failed to get latest result");
+            },
+            getReclaimableBytes: function () {
+                return handle($http.get(base + "GetReclaimableBytes"), "Failed to get reclaimable space");
+            },
+            deleteItems: function (jobId, ids, dryRun) {
+                return handle($http.post(base + "DeleteItems?jobId=" + jobId, { ids: ids, dryRun: dryRun }), "Failed to delete items");
+            },
+            deleteAll: function (jobId, dryRun) {
+                return handle($http.post(base + "DeleteAll?jobId=" + jobId, { dryRun: dryRun }), "Failed to delete items");
+            },
+            // The token IS the credential (the download endpoint is anonymous but validates
+            // jobId + token), which is what lets the browser download a multi-GB zip natively.
+            exportDownloadUrl: function (jobId, token) {
+                return "/Umbraco/Api/MediaManagerExport/Download?jobId=" + jobId + "&token=" + encodeURIComponent(token);
             }
         };
     }

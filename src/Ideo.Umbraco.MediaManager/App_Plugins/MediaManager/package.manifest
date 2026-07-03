@@ -3,7 +3,7 @@
     {
       "alias": "mediaManager.dashboard",
       "view": "/App_Plugins/MediaManager/dashboard.html",
-      "sections": [ "media" ],
+      "sections": [ "settings" ],
       "weight": 5,
       "name": "Media Manager"
     }
