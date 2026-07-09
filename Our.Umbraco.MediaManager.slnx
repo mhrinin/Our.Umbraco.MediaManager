@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/Our.Umbraco.MediaManager.Web/Our.Umbraco.MediaManager.Web.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Our.Umbraco.MediaManager/Our.Umbraco.MediaManager.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Our.Umbraco.MediaManager.Tests/Our.Umbraco.MediaManager.Tests.csproj" />
+  </Folder>
+</Solution>

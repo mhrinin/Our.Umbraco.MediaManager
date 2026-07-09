@@ -1,6 +1,6 @@
-# Ideo.Umbraco.MediaManager — Feature Proposal
+# Our.Umbraco.MediaManager — Feature Proposal
 
-**Package / root namespace:** `Ideo.Umbraco.MediaManager`
+**Package / root namespace:** `Our.Umbraco.MediaManager`
 
 ## Context
 A recurring pain in Umbraco projects: media libraries accumulate files that are no longer

@@ -1,4 +1,4 @@
-# Ideo.Umbraco.MediaManager (Umbraco 13 line)
+# Our.Umbraco.MediaManager (Umbraco 13 line)
 
 A safe media-cleanup extension for **Umbraco 13 (LTS)** — this branch (`v13/main`) ships the
 legacy-backoffice (AngularJS) edition. For **Umbraco 16/17** use the `main` branch / the `17.x`
@@ -29,7 +29,7 @@ makes existing "delete unused media" plugins dangerous.
 ## Installation
 
 ```bash
-dotnet add package Ideo.Umbraco.MediaManager --version 13.*
+dotnet add package Our.Umbraco.MediaManager --version 13.*
 ```
 
 The Media Manager dashboard appears in the backoffice **Media** section.
@@ -53,14 +53,14 @@ draft — for references. Disable on very large sites to fall back to relations 
 # The AngularJS UI is plain source under src/…/wwwroot/App_Plugins/MediaManager — no build step.
 
 # Run the sample host (Umbraco 13, SQLite, unattended install)
-cd samples/Ideo.Umbraco.MediaManager.Web
+cd samples/Our.Umbraco.MediaManager.Web
 dotnet run
 ```
 
 ## Repository layout (this branch)
 
 ```
-src/Ideo.Umbraco.MediaManager      # the package (C# backend + AngularJS App_Plugins UI)
+src/Our.Umbraco.MediaManager      # the package (C# backend + AngularJS App_Plugins UI)
 samples/…Web                       # local Umbraco 13 host for dev + manual testing
 tests/…Tests                       # unit tests
 docs/                              # feature proposal / design notes
