@@ -20,10 +20,10 @@ jobs:
             9.0.x
 
       - name: Restore
-        run: dotnet restore Ideo.Umbraco.MediaManager.slnx
+        run: dotnet restore Our.Umbraco.MediaManager.slnx
 
       - name: Build
-        run: dotnet build Ideo.Umbraco.MediaManager.slnx -c Release --no-restore
+        run: dotnet build Our.Umbraco.MediaManager.slnx -c Release --no-restore
 
       - name: Test
-        run: dotnet test Ideo.Umbraco.MediaManager.slnx -c Release --no-build --verbosity normal
+        run: dotnet test Our.Umbraco.MediaManager.slnx -c Release --no-build --verbosity normal

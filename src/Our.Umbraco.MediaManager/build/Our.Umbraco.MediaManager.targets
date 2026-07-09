@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Umbraco 10 discovers package.manifest (and plugin lang files) by scanning the site's PHYSICAL
+    App_Plugins folder only, so the dashboard files must be copied into the consuming project.
+  -->
+  <ItemGroup>
+    <MediaManagerFiles Include="$(MSBuildThisFileDirectory)..\content\App_Plugins\**\*.*" />
+  </ItemGroup>
+
+  <Target Name="CopyMediaManagerAssets" BeforeTargets="BeforeBuild">
+    <Copy
+      SourceFiles="@(MediaManagerFiles)"
+      DestinationFiles="@(MediaManagerFiles->'$(MSBuildProjectDirectory)\App_Plugins\%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
+</Project>

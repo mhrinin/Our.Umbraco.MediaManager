@@ -28,7 +28,7 @@ jobs:
 
       - name: Pack
         run: >
-          dotnet pack src/Ideo.Umbraco.MediaManager/Ideo.Umbraco.MediaManager.csproj
+          dotnet pack src/Our.Umbraco.MediaManager/Our.Umbraco.MediaManager.csproj
           -c Release
           -p:PackageVersion=${{ steps.version.outputs.version }}
           -o artifacts
