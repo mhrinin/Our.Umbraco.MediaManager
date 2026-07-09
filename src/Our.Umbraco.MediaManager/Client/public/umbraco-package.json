@@ -1,0 +1,13 @@
+{
+  "id": "Our.Umbraco.MediaManager",
+  "name": "Umbraco Media Manager",
+  "version": "0.1.0",
+  "extensions": [
+    {
+      "type": "bundle",
+      "alias": "Our.Umbraco.MediaManager.Bundle",
+      "name": "Umbraco Media Manager Bundle",
+      "js": "/App_Plugins/MediaManager/media-manager.js"
+    }
+  ]
+}

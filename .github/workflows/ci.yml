@@ -24,19 +24,19 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: src/Ideo.Umbraco.MediaManager/Client/package-lock.json
+          cache-dependency-path: src/Our.Umbraco.MediaManager/Client/package-lock.json
 
       - name: Build frontend
-        working-directory: src/Ideo.Umbraco.MediaManager/Client
+        working-directory: src/Our.Umbraco.MediaManager/Client
         run: |
           npm ci
           npm run build
 
       - name: Restore
-        run: dotnet restore Ideo.Umbraco.MediaManager.slnx
+        run: dotnet restore Our.Umbraco.MediaManager.slnx
 
       - name: Build
-        run: dotnet build Ideo.Umbraco.MediaManager.slnx -c Release --no-restore -p:SkipClientBuild=true
+        run: dotnet build Our.Umbraco.MediaManager.slnx -c Release --no-restore -p:SkipClientBuild=true
 
       - name: Test
-        run: dotnet test Ideo.Umbraco.MediaManager.slnx -c Release --no-build --verbosity normal
+        run: dotnet test Our.Umbraco.MediaManager.slnx -c Release --no-build --verbosity normal

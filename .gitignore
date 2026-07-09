@@ -18,7 +18,7 @@ npm-debug.log*
 .eslintcache
 
 # Generated frontend build output (App_Plugins is emitted by vite)
-src/Ideo.Umbraco.MediaManager/wwwroot/App_Plugins/MediaManager/
+src/Our.Umbraco.MediaManager/wwwroot/App_Plugins/MediaManager/
 
 # Umbraco sample host runtime
 samples/**/umbraco/Data/

@@ -29,21 +29,21 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: src/Ideo.Umbraco.MediaManager/Client/package-lock.json
+          cache-dependency-path: src/Our.Umbraco.MediaManager/Client/package-lock.json
 
       - name: Derive version from tag
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build frontend
-        working-directory: src/Ideo.Umbraco.MediaManager/Client
+        working-directory: src/Our.Umbraco.MediaManager/Client
         run: |
           npm ci
           npm run build
 
       - name: Pack
         run: >
-          dotnet pack src/Ideo.Umbraco.MediaManager/Ideo.Umbraco.MediaManager.csproj
+          dotnet pack src/Our.Umbraco.MediaManager/Our.Umbraco.MediaManager.csproj
           -c Release
           -p:PackageVersion=${{ steps.version.outputs.version }}
           -p:SkipClientBuild=true

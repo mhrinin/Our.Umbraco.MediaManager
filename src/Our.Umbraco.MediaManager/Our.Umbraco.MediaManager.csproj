@@ -1,0 +1,73 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+
+  <PropertyGroup>
+    <!-- net9.0 -> Umbraco 16, net10.0 -> Umbraco 17. -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <StaticWebAssetBasePath>/</StaticWebAssetBasePath>
+
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <IsPackable>true</IsPackable>
+    <PackageId>Our.Umbraco.MediaManager</PackageId>
+    <PackageVersion>0.1.0-dev</PackageVersion>
+    <Version>$(PackageVersion)</Version>
+    <Authors>Mykhailo Hrinin</Authors>
+    <Product>Our.Umbraco.MediaManager</Product>
+    <Title>Umbraco Media Manager</Title>
+    <Description>Safe, async media cleanup for Umbraco 16–17: find and remove unused media nodes, duplicates, broken nodes and orphaned physical files, guarded by a deep reference scan, with dry-run preview and Recycle Bin safety.</Description>
+    <PackageDescription>$(Description)</PackageDescription>
+    <PackageTags>Umbraco;umbraco-marketplace;Media;Cleanup;Orphaned;Extension</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/mhrinin/Our.Umbraco.MediaManager</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mhrinin/Our.Umbraco.MediaManager</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+
+  <!-- Umbraco 16 (net9.0) -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <DefineConstants>$(DefineConstants);UMBRACO_16</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageReference Include="Umbraco.Cms.Web.Common" Version="[16.0.0,17.0.0)" />
+    <PackageReference Include="Umbraco.Cms.Api.Common" Version="[16.0.0,17.0.0)" />
+    <PackageReference Include="Umbraco.Cms.Api.Management" Version="[16.0.0,17.0.0)" />
+  </ItemGroup>
+
+  <!-- Umbraco 17 (net10.0) -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <DefineConstants>$(DefineConstants);UMBRACO_17</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Umbraco.Cms.Web.Common" Version="[17.0.0,18.0.0)" />
+    <PackageReference Include="Umbraco.Cms.Api.Common" Version="[17.0.0,18.0.0)" />
+    <PackageReference Include="Umbraco.Cms.Api.Management" Version="[17.0.0,18.0.0)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Exclude the frontend source from the build/package; it is compiled by vite into wwwroot. -->
+  <ItemGroup>
+    <Content Remove="Client\**" />
+    <None Include="Client\public\umbraco-package.json" Pack="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\" />
+  </ItemGroup>
+
+  <!--
+    Build the Lit/Vite frontend before packing so the NuGet package always ships fresh
+    App_Plugins assets. Runs only in Release (CI/pack); local Debug builds skip it so
+    day-to-day dev builds stay fast (build the Client manually with `npm run build`).
+  -->
+  <Target Name="BuildClientAssets" BeforeTargets="AssignTargetPaths" Condition="'$(Configuration)' == 'Release' and '$(SkipClientBuild)' != 'true' and Exists('Client\package.json')">
+    <Message Importance="high" Text="Building MediaManager frontend (npm ci + build)..." />
+    <Exec Command="npm ci" WorkingDirectory="Client" />
+    <Exec Command="npm run build" WorkingDirectory="Client" />
+  </Target>
+
+</Project>
