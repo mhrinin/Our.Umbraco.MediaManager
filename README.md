@@ -1,42 +1,50 @@
-# Our.Umbraco.MediaManager (Umbraco 10 line)
+# Our.Umbraco.MediaManager (Umbraco 10)
 
-A safe media-cleanup extension for **Umbraco 10** — this branch (`v10/main`) ships the
-legacy-backoffice (AngularJS) edition. For **Umbraco 16/17** use the `main` branch / the `17.x`
-package versions.
+Safe media cleanup for **Umbraco 10** — find and remove media that no longer belongs in your
+library, without ever deleting anything that's still in use.
 
-Find and remove media that no longer belongs in your library — **unused media nodes** (no content
-references anywhere), **duplicates** (byte-identical files), **broken media** (nodes whose file is
-missing) and **orphaned physical files** (files on disk with no media node) — without the risk that
-makes existing "delete unused media" plugins dangerous.
+This is the legacy-backoffice (AngularJS) edition, maintained on the `v10/main` branch. For
+**Umbraco 16 & 17**, use the `main` branch / the `17.x` package.
 
-## Why it is safe
+## What it finds
 
-- **Deep reference scan** — before flagging a media item as unused, its GUID/UDI is searched
-  across all content property values (rich text, Block List/Grid, nested content), **published
-  *and* draft**, on top of Umbraco relations. This is the guard against false positives.
-- **Mandatory preview** — you always see the exact set that would change before anything happens.
-- **Recycle Bin, not hard delete** — unused/duplicate/broken media nodes are moved to Umbraco's
-  Media Recycle Bin, so they are fully recoverable until you explicitly empty the bin. Orphaned
-  physical files (which have no node, and so no bin) are deleted only via an explicit, previewed
-  action that additionally requires Settings section access.
-- **Async & cancellable** — scans run as background jobs with progress, so they never lock up on
-  large libraries.
+- **Unused media** — nodes with no content references anywhere
+- **Duplicates** — byte-identical files
+- **Broken media** — nodes whose underlying file is missing
+- **Orphaned files** — files on disk with no media node
+- **Storage report** — totals, breakdown by type, and largest files
+
+## Safe by design
+
+Existing "delete unused media" tools are risky because they trust relations alone and hard-delete.
+This one doesn't:
+
+- **Deep reference scan** — a media item's GUID/UDI is searched across every content property value
+  (rich text, Block List/Grid, nested content), **published *and* draft**, on top of Umbraco
+  relations — before it is ever flagged as unused. This is the guard against false positives.
+- **Preview first** — every action shows the exact set that will change before it runs.
+- **Recycle Bin, not hard delete** — media nodes are moved to the Media Recycle Bin, recoverable
+  until you empty it.
+- **Validated file deletion** — orphaned physical files are removed only through an explicit,
+  previewed action, and the server accepts only paths its own scan flagged.
+- **Async & cancellable** — scans run as background jobs with progress, so large libraries never
+  lock up the UI.
 
 ## Requirements
 
-- Umbraco CMS `10.x` (.NET 6)
+- Umbraco `10.x` · .NET 6
 
-> Note: Umbraco 10 and .NET 6 have reached end-of-life upstream. This line exists as a convenience
-> for existing v10 sites; new features land on the `main` (Umbraco 16/17) line first, and upgrading
-> Umbraco itself remains the recommended path.
+> Umbraco 10 and .NET 6 are end-of-life upstream. This line is a convenience for existing v10
+> sites; new features land on the `main` (Umbraco 16/17) line first, and upgrading Umbraco remains
+> the recommended path.
 
-## Installation
+## Install
 
 ```bash
 dotnet add package Our.Umbraco.MediaManager --version 10.*
 ```
 
-The Media Manager dashboard appears in the backoffice **Media** section.
+Then open **Settings → Media Manager** in the backoffice and run a scan.
 
 ## Configuration
 
@@ -48,32 +56,17 @@ The Media Manager dashboard appears in the backoffice **Media** section.
 }
 ```
 
-`DeepReferenceScan` (default `true`) additionally scans content property values — published and
-draft — for references. Disable on very large sites to fall back to relations only.
+`DeepReferenceScan` (default `true`) also scans content property values — published and draft — on
+top of Umbraco relations. Turn it off on very large sites to rely on relations only.
 
-## Local development
+## Contributing
+
+The UI is plain AngularJS under `App_Plugins/MediaManager` — no build step. Run the sample host
+(Umbraco 10, SQLite, unattended install):
 
 ```bash
-# The AngularJS UI is plain source under src/…/wwwroot/App_Plugins/MediaManager — no build step.
-
-# Run the sample host (Umbraco 10, SQLite, unattended install)
-cd samples/Our.Umbraco.MediaManager.Web
-dotnet run
+cd samples/Our.Umbraco.MediaManager.Web && dotnet run
 ```
-
-## Repository layout (this branch)
-
-```
-src/Our.Umbraco.MediaManager      # the package (C# backend + AngularJS App_Plugins UI)
-samples/…Web                       # local Umbraco 10 host for dev + manual testing
-tests/…Tests                       # unit tests
-docs/                              # feature proposal / design notes
-```
-
-## Releasing
-
-Push a `v10.*` git tag (e.g. `v10.0.1`); the release workflow packs and publishes to nuget.org
-using **Trusted Publishing** (OIDC) — no stored API key. The `main` branch owns 16/17 tags; `v13/main` owns `v13.*`.
 
 ## License
 
