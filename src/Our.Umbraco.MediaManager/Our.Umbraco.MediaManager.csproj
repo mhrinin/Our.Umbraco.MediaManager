@@ -19,6 +19,7 @@
     <PackageDescription>$(Description)</PackageDescription>
     <PackageTags>Umbraco;umbraco-marketplace;Media;Cleanup;Orphaned;Extension</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageIcon>logo.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/mhrinin/Our.Umbraco.MediaManager</PackageProjectUrl>
     <RepositoryUrl>https://github.com/mhrinin/Our.Umbraco.MediaManager</RepositoryUrl>
@@ -47,6 +48,7 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="logo.png" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <!-- Exclude the frontend source from the build/package; it is compiled by vite into wwwroot. -->
