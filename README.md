@@ -69,9 +69,12 @@ a scan.
 
 - `DeepReferenceScan` (default `true`) also scans content property values — published and draft — on
 top of Umbraco relations. Turn it off on very large sites to rely on relations only.
-- `Section` (default `"Settings"`) controls which backoffice section hosts the dashboard. Set to `"Media"`
-to display the dashboard in the Media section with `SectionAccessMedia` authorization, allowing editors
-without Settings access to use it.
+- `Section` (default `"Settings"`) controls which backoffice section hosts the dashboard and whose
+access policy guards the API. Allowed values are `"Settings"` and `"Media"`; any other value fails at
+startup. With `"Media"`, editors with Media section access can use the dashboard without Settings
+access. Note that scan results then cover the whole media library regardless of the user's media start
+nodes; deleting media still honours start nodes and per-node permissions, and deleting orphaned files
+always requires Settings section access.
 
 ## Contributing
 

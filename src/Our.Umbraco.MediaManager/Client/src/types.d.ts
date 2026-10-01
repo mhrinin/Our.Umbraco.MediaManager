@@ -53,6 +53,10 @@ export interface ReclaimableSpaceResponse {
   reclaimableBytes: number;
 }
 
+export interface ConfigurationResponse {
+  section: string;
+}
+
 export interface ExportInfo {
   fileCount: number;
   zipSizeBytes: number;

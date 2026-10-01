@@ -10,4 +10,3 @@ public static class Constants
 
     public const string AuthorizationPolicy = "Our.Umbraco.MediaManager.Access";
 }
-

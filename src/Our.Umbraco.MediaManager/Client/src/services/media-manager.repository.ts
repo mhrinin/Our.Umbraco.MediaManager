@@ -3,6 +3,7 @@ import { umbHttpClient } from "@umbraco-cms/backoffice/http-client";
 import type { UmbControllerHost } from "@umbraco-cms/backoffice/controller-api";
 import type {
   CleanupResult,
+  ConfigurationResponse,
   ReclaimableSpaceResponse,
   ScanJobStatus,
   ScanResultItems,
@@ -33,6 +34,17 @@ export class MediaManagerRepository {
   private readonly apiBaseUrl = API_BASE_URL;
 
   constructor(private host: UmbControllerHost) {}
+
+  async getConfiguration(): Promise<ConfigurationResponse | null> {
+    const { data } = await tryExecute(
+      this.host,
+      umbHttpClient.get<ConfigurationResponse>({
+        url: `${this.apiBaseUrl}/config`,
+        security: [...BEARER],
+      }),
+    );
+    return data ?? null;
+  }
 
   async startScan(type: ScanType, signal?: AbortSignal): Promise<string> {
     const { data, error } = await tryExecute(

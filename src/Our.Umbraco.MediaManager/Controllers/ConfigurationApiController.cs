@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Our.Umbraco.MediaManager.Models;
@@ -21,9 +22,6 @@ namespace Our.Umbraco.MediaManager.Controllers;
 public class ConfigurationApiController(IOptions<MediaManagerOptions> options) : ControllerBase
 {
     [HttpGet("config")]
-    public IActionResult GetConfig()
-        => Ok(new
-        {
-            section = options.Value.SectionAlias
-        });
+    [ProducesResponseType<ConfigurationResponse>(StatusCodes.Status200OK)]
+    public IActionResult GetConfig() => Ok(new ConfigurationResponse(options.Value.SectionAlias));
 }

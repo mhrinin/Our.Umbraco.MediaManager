@@ -57,6 +57,17 @@ public class CleanupApiController(
                 return Forbid();
             }
         }
+        else
+        {
+            // Orphaned files sit outside the media tree, so media start nodes cannot scope them: deleting
+            // them stays a Settings-level operation even when the API is opened up to the Media section.
+            var authorization = await authorizationService.AuthorizeAsync(User, AuthorizationPolicies.SectionAccessSettings);
+
+            if (!authorization.Succeeded)
+            {
+                return Forbid();
+            }
+        }
 
         return Ok(await cleanupService.DeleteItemsAsync(scanResult, ids, dryRun));
     }

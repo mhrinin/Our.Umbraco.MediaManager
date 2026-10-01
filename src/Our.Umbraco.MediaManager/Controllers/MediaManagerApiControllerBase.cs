@@ -13,4 +13,3 @@ namespace Our.Umbraco.MediaManager.Controllers;
 [MapToApi(Constants.ApiName)]
 [JsonOptionsName(UmbracoConstants.JsonOptionsNames.BackOffice)]
 public abstract class MediaManagerApiControllerBase : ControllerBase;
-

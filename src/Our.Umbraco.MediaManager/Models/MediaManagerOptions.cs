@@ -12,15 +12,13 @@ public sealed class MediaManagerOptions
     public bool DeepReferenceScan { get; set; } = true;
 
     /// <summary>
-    /// Backoffice section where the Media Manager dashboard is displayed.
-    /// Allowed values: "Settings" (default) or "Media".
+    /// Backoffice section that hosts the dashboard and whose access policy guards the API.
     /// </summary>
-    public string Section { get; set; } = "Settings";
+    public MediaManagerSection Section { get; set; } = MediaManagerSection.Settings;
 
-    public bool IsMediaSection =>
-        string.Equals(Section, "Media", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(Section, "Umb.Section.Media", StringComparison.OrdinalIgnoreCase);
-
-    public string SectionAlias => IsMediaSection ? "Umb.Section.Media" : "Umb.Section.Settings";
+    public string SectionAlias => Section switch
+    {
+        MediaManagerSection.Media => "Umb.Section.Media",
+        _ => "Umb.Section.Settings",
+    };
 }
-

@@ -1,9 +1,9 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using Our.Umbraco.MediaManager.Interfaces;
 using Our.Umbraco.MediaManager.Models;
 using Our.Umbraco.MediaManager.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Umbraco.Cms.Core.Composing;
 using Umbraco.Cms.Core.DependencyInjection;
 using Umbraco.Cms.Web.Common.Authorization;
@@ -15,28 +15,28 @@ public class Composer : IComposer
     public void Compose(IUmbracoBuilder builder)
     {
         builder.Services.AddOptions<MediaManagerOptions>()
-            .Bind(builder.Config.GetSection(MediaManagerOptions.SectionName));
+            .Bind(builder.Config.GetSection(MediaManagerOptions.SectionName))
+            .Validate(
+                options => Enum.IsDefined(options.Section),
+                $"{MediaManagerOptions.SectionName}:{nameof(MediaManagerOptions.Section)} must be one of: {string.Join(", ", Enum.GetNames<MediaManagerSection>())}.")
+            .ValidateOnStart();
 
         builder.Services.AddOptions<AuthorizationOptions>()
-            .PostConfigure<IOptions<MediaManagerOptions>>((authOptions, mmOptions) =>
+            .PostConfigure<IOptions<MediaManagerOptions>>((authorizationOptions, mediaManagerOptions) =>
             {
-                var policyName = mmOptions.Value.IsMediaSection
-                    ? AuthorizationPolicies.SectionAccessMedia
-                    : AuthorizationPolicies.SectionAccessSettings;
+                var sectionPolicyName = mediaManagerOptions.Value.Section switch
+                {
+                    MediaManagerSection.Media => AuthorizationPolicies.SectionAccessMedia,
+                    _ => AuthorizationPolicies.SectionAccessSettings,
+                };
 
-                var basePolicy = authOptions.GetPolicy(policyName);
-                if (basePolicy is not null)
-                {
-                    authOptions.AddPolicy(Constants.AuthorizationPolicy, basePolicy);
-                }
-                else
-                {
-                    authOptions.AddPolicy(Constants.AuthorizationPolicy, policy => policy.RequireAuthenticatedUser());
-                }
+                var sectionPolicy = authorizationOptions.GetPolicy(sectionPolicyName)
+                    ?? throw new InvalidOperationException($"Umbraco authorization policy '{sectionPolicyName}' is not registered; the Media Manager API cannot be secured.");
+
+                authorizationOptions.AddPolicy(Constants.AuthorizationPolicy, sectionPolicy);
             });
 
         builder.Services.AddScoped<IMediaReferenceCollector, MediaReferenceCollector>();
-
         builder.Services.AddScoped<IMediaScan, UnusedMediaScanner>();
         builder.Services.AddScoped<IMediaScan, OrphanedFileScanner>();
         builder.Services.AddScoped<IMediaScan, BrokenMediaScanner>();
