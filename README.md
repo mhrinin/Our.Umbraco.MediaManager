@@ -61,13 +61,17 @@ a scan.
 ```json
 {
   "MediaManager": {
-    "DeepReferenceScan": true
+    "DeepReferenceScan": true,
+    "Section": "Settings"
   }
 }
 ```
 
-`DeepReferenceScan` (default `true`) also scans content property values — published and draft — on
+- `DeepReferenceScan` (default `true`) also scans content property values — published and draft — on
 top of Umbraco relations. Turn it off on very large sites to rely on relations only.
+- `Section` (default `"Settings"`) controls which backoffice section hosts the dashboard. Set to `"Media"`
+to display the dashboard in the Media section with `SectionAccessMedia` authorization, allowing editors
+without Settings access to use it.
 
 ## Contributing
 
