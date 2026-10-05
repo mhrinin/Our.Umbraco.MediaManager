@@ -3,7 +3,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   build: {
     lib: {
-      entry: "src/bundle.manifests.ts",
+      entry: "src/components/dashboards/media-manager-dashboard.element.ts",
       formats: ["es"],
       fileName: "media-manager",
     },

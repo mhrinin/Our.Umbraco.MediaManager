@@ -54,7 +54,6 @@
   <!-- Exclude the frontend source from the build/package; it is compiled by vite into wwwroot. -->
   <ItemGroup>
     <Content Remove="Client\**" />
-    <None Include="Client\public\umbraco-package.json" Pack="false" />
   </ItemGroup>
 
   <ItemGroup>

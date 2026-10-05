@@ -14,11 +14,5 @@ public sealed class MediaManagerOptions
     /// <summary>
     /// Backoffice section that hosts the dashboard and whose access policy guards the API.
     /// </summary>
-    public MediaManagerSection Section { get; set; } = MediaManagerSection.Settings;
-
-    public string SectionAlias => Section switch
-    {
-        MediaManagerSection.Media => "Umb.Section.Media",
-        _ => "Umb.Section.Settings",
-    };
+    public string Section { get; set; } = "Umb.Section.Settings";
 }

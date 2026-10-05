@@ -1,12 +1,13 @@
+using Our.Umbraco.MediaManager.Authorization;
 using Our.Umbraco.MediaManager.Interfaces;
 using Our.Umbraco.MediaManager.Models;
 using Our.Umbraco.MediaManager.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
+using OpenIddict.Validation.AspNetCore;
 using Umbraco.Cms.Core.Composing;
 using Umbraco.Cms.Core.DependencyInjection;
-using Umbraco.Cms.Web.Common.Authorization;
+using Umbraco.Cms.Infrastructure.Manifest;
 
 namespace Our.Umbraco.MediaManager;
 
@@ -15,26 +16,16 @@ public class Composer : IComposer
     public void Compose(IUmbracoBuilder builder)
     {
         builder.Services.AddOptions<MediaManagerOptions>()
-            .Bind(builder.Config.GetSection(MediaManagerOptions.SectionName))
-            .Validate(
-                options => Enum.IsDefined(options.Section),
-                $"{MediaManagerOptions.SectionName}:{nameof(MediaManagerOptions.Section)} must be one of: {string.Join(", ", Enum.GetNames<MediaManagerSection>())}.")
-            .ValidateOnStart();
+            .Bind(builder.Config.GetSection(MediaManagerOptions.SectionName));
 
-        builder.Services.AddOptions<AuthorizationOptions>()
-            .PostConfigure<IOptions<MediaManagerOptions>>((authorizationOptions, mediaManagerOptions) =>
-            {
-                var sectionPolicyName = mediaManagerOptions.Value.Section switch
-                {
-                    MediaManagerSection.Media => AuthorizationPolicies.SectionAccessMedia,
-                    _ => AuthorizationPolicies.SectionAccessSettings,
-                };
+        builder.Services.AddSingleton<IPackageManifestReader, MediaManagerManifestReader>();
 
-                var sectionPolicy = authorizationOptions.GetPolicy(sectionPolicyName)
-                    ?? throw new InvalidOperationException($"Umbraco authorization policy '{sectionPolicyName}' is not registered; the Media Manager API cannot be secured.");
-
-                authorizationOptions.AddPolicy(Constants.AuthorizationPolicy, sectionPolicy);
-            });
+        builder.Services.AddSingleton<IAuthorizationHandler, SectionAccessHandler>();
+        builder.Services.AddAuthorization(options => options.AddPolicy(Constants.AuthorizationPolicy, policy =>
+        {
+            policy.AuthenticationSchemes.Add(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme);
+            policy.Requirements.Add(new SectionAccessRequirement());
+        }));
 
         builder.Services.AddScoped<IMediaReferenceCollector, MediaReferenceCollector>();
         builder.Services.AddScoped<IMediaScan, UnusedMediaScanner>();
