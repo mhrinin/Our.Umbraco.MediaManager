@@ -61,13 +61,19 @@ a scan.
 ```json
 {
   "MediaManager": {
-    "DeepReferenceScan": true
+    "DeepReferenceScan": true,
+    "Section": "Umb.Section.Settings"
   }
 }
 ```
 
-`DeepReferenceScan` (default `true`) also scans content property values — published and draft — on
+- `DeepReferenceScan` (default `true`) also scans content property values — published and draft — on
 top of Umbraco relations. Turn it off on very large sites to rely on relations only.
+- `Section` (default `"Umb.Section.Settings"`) is the alias of the backoffice section that hosts the
+dashboard, e.g. `"Umb.Section.Media"` or a custom section's alias. The API requires access to that
+section. Note that scan results then cover the whole media library regardless of the user's media start
+nodes; deleting media still honours start nodes and per-node permissions, and deleting orphaned files
+always requires Settings section access.
 
 ## Contributing
 

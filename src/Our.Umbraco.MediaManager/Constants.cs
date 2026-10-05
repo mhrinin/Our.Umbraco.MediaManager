@@ -7,4 +7,6 @@ public static class Constants
     public const string BackOfficeRoute = "media-manager";
 
     public const string PluginName = "MediaManager";
+
+    public const string AuthorizationPolicy = "Our.Umbraco.MediaManager.Access";
 }

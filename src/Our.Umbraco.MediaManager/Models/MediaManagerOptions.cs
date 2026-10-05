@@ -10,4 +10,9 @@ public sealed class MediaManagerOptions
     /// hydrating all content on each scan; detection then relies on relations only (published references).
     /// </summary>
     public bool DeepReferenceScan { get; set; } = true;
+
+    /// <summary>
+    /// Backoffice section that hosts the dashboard and whose access policy guards the API.
+    /// </summary>
+    public string Section { get; set; } = "Umb.Section.Settings";
 }
